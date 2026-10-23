@@ -24,12 +24,12 @@ Portrait dashboard on the navy screen:
 
 | Key | Action |
 | --- | --- |
-| Up | Allow the pending prompt |
-| Down | Refuse the pending prompt |
-| OK | Open or close the token and encryption page |
-| OK long-press | Dim the backlight |
+| Up | Previous info or settings row. Allows a pending prompt. |
+| Down | Next row, or cancels a confirmation. Refuses a pending prompt. |
+| OK | Next main page: dashboard, pet, info. Inside settings, changes the selected item. |
+| OK long-press | Open or close settings |
 
-The first press after the screen has dimmed only wakes it. A permission prompt or pairing code keeps the backlight up. With no prompt and no key for 45 seconds, the backlight dims.
+Info covers the name, buttons, battery, address, link security, the six-digit pairing code, and attribution. Settings stores brightness and the BLE switch. Sound, Wi-Fi, the LED, and clock rotation read as not available. The screen arrangement is provisional. The first press after the backlight has dimmed only wakes it. A permission prompt or pairing code keeps the backlight up. With no prompt and no key for 45 seconds, the backlight dims.
 
 ## Host path
 

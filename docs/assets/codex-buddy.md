@@ -21,7 +21,9 @@ The host model follows the Stick plugin: Codex hooks start a local process, and 
 
 ## What was redesigned
 
-The screen is a new 240×320 layout in `main/codex_ui.c`. It does not use the demo menu, `demo_*.c` pages, or the `ui_pixel` shell. The pet is a small LVGL figure in `main/codex_pet.c`, not a GIF. Up allows, Down refuses, OK opens a token page, and a long OK press dims the backlight. There is no IMU, so dizzy and heart are poses the host can send; heart also plays for 1.8 seconds after a local allow.
+The screen is a new 240×320 layout in `main/codex_ui.c`. It does not use the demo menu, `demo_*.c` pages, or the `ui_pixel` shell. The pet is a small LVGL figure in `main/codex_pet.c`, not a GIF. Spacing, type size, and the dashboard composition are provisional until a layout direction is chosen. There is no IMU, so dizzy and heart are poses the host can send; heart also plays for 1.8 seconds after a local allow.
+
+Main pages are Dashboard, Pet, and Info. OK steps through them. Up and Down step through Info (About, Buttons, Device, Bluetooth, Credits). A long OK press opens or closes Settings. Settings stores brightness (four levels) and the BLE radio switch in NVS. Sound, Wi-Fi, the LED, and clock rotation are shown as not available. Unpair and Reset each ask for a second OK. Reset clears only the `codex` preference namespace. Down cancels a confirmation. While a prompt is open, Up still allows and Down still refuses. The passkey card still covers the page. The backlight still drops after 45 seconds without a key, and the next key only wakes the screen.
 
 Fixed Chinese strings use `assets/fonts/codex_font_16.c` and `assets/fonts/codex_font_20.c`. Widgets select those fonts directly. `tests/test_codex_font_coverage.py` checks every printable character in the UI sources, and checks that U+9F98 is absent so the test can fail.
 
@@ -30,8 +32,8 @@ Fixed Chinese strings use `assets/fonts/codex_font_16.c` and `assets/fonts/codex
 - GIF pets, folder push, and LittleFS character packs.
 - Stick IMU gestures, nap time, level-up, and the multi-agent hub for Pi, Hermes, and Cursor.
 - Tertiary provider meters and the OpenCodex quota client.
-- A full status panel beyond name, security, battery, approvals, and denials.
-- Audio.
+- A locked visual layout. Info and Settings are placeholder lists until a 240×320 direction is chosen.
+- Audio, Wi-Fi, the status LED, and clock rotation. The settings list marks them unavailable instead of inventing behavior.
 
 `main/demo_*.c` remains in the tree so the existing baseline host tests still compile. The firmware CMake file does not link those pages, and `app_main` never opens them.
 

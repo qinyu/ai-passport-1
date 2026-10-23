@@ -3,10 +3,11 @@ idf_component_register(
          "codex_protocol.c"
          "codex_model.c"
          "codex_ble.c"
+         "codex_prefs.c"
          "codex_pet.c"
          "codex_ui.c"
     INCLUDE_DIRS "."
-    REQUIRES bsp bt nvs_flash esp_timer esp_hw_support
+    REQUIRES bsp bt nvs_flash esp_timer esp_hw_support esp_app_format
 )
 
 target_sources(${COMPONENT_LIB} PRIVATE

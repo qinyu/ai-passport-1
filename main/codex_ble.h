@@ -31,5 +31,8 @@ esp_err_t codex_ble_send(const char *json);
 /* Clear stored bonds without dropping the link. The caller sends the ack, then disconnects. */
 esp_err_t codex_ble_clear_bonds(void);
 esp_err_t codex_ble_disconnect(void);
+/* Stop or resume advertising without tearing down the NimBLE host. Bonds stay. */
+esp_err_t codex_ble_set_enabled(bool enabled);
 void codex_ble_copy_name(char *out, size_t out_size);
+void codex_ble_copy_mac(char *out, size_t out_size);
 bool codex_ble_is_secure(void);

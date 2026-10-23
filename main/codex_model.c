@@ -9,6 +9,8 @@ void codex_action_clear(codex_action_t *action)
     memset(action, 0, sizeof(*action));
 }
 
+static void copy_field(char *dst, size_t dst_size, const char *src);
+
 void codex_model_init(codex_model_t *model)
 {
     if (model == NULL) return;
@@ -16,8 +18,39 @@ void codex_model_init(codex_model_t *model)
     memcpy(model->state, "idle", 5);
     memcpy(model->primary_label, "5h", 3);
     memcpy(model->secondary_label, "7d", 3);
+    model->brightness = 2;
+    model->ble_enabled = true;
     model->battery_percent = -1;
     model->battery_mv = -1;
+}
+
+void codex_model_set_prefs(codex_model_t *model, uint8_t brightness, bool ble_enabled)
+{
+    if (model == NULL) return;
+    model->brightness = brightness < 4 ? brightness : 3;
+    model->ble_enabled = ble_enabled;
+}
+
+void codex_model_set_identity(codex_model_t *model, const char *name, const char *mac,
+                              const char *version)
+{
+    if (model == NULL) return;
+    copy_field(model->device_name, sizeof model->device_name, name);
+    copy_field(model->mac, sizeof model->mac, mac);
+    copy_field(model->fw_version, sizeof model->fw_version, version);
+}
+
+uint8_t codex_brightness_percent(uint8_t level)
+{
+    static const uint8_t k_levels[4] = {20, 45, 70, 100};
+    if (level > 3) level = 3;
+    return k_levels[level];
+}
+
+bool codex_setting_available(codex_setting_t item)
+{
+    return item == CODEX_SET_BRIGHT || item == CODEX_SET_BLE || item == CODEX_SET_UNPAIR ||
+           item == CODEX_SET_RESET;
 }
 
 void codex_model_note_input(codex_model_t *model, uint32_t now_ms)
@@ -149,6 +182,66 @@ static void decide(codex_model_t *model, const char *decision, uint32_t now_ms, 
     clear_prompt(model);
 }
 
+static void close_settings(codex_model_t *model)
+{
+    model->settings_open = false;
+    model->confirm = CODEX_CONFIRM_NONE;
+}
+
+static void move_setting(codex_model_t *model, int delta)
+{
+    int next = (int)model->setting + delta;
+    if (next < 0) next = CODEX_SET_COUNT - 1;
+    if (next >= CODEX_SET_COUNT) next = 0;
+    model->setting = (codex_setting_t)next;
+    model->confirm = CODEX_CONFIRM_NONE;
+}
+
+static void activate_setting(codex_model_t *model, uint32_t now_ms, codex_action_t *action)
+{
+    (void)now_ms;
+    if (!codex_setting_available(model->setting)) {
+        model->confirm = CODEX_CONFIRM_NONE;
+        return;
+    }
+    if (model->setting == CODEX_SET_BRIGHT) {
+        model->confirm = CODEX_CONFIRM_NONE;
+        model->brightness = (uint8_t)((model->brightness + 1u) % 4u);
+        return;
+    }
+    if (model->setting == CODEX_SET_BLE) {
+        model->confirm = CODEX_CONFIRM_NONE;
+        model->ble_enabled = !model->ble_enabled;
+        if (action != NULL) {
+            action->kind = CODEX_ACTION_BLE_SET;
+            action->ble_enable = model->ble_enabled;
+        }
+        return;
+    }
+    if (model->setting == CODEX_SET_UNPAIR) {
+        if (model->confirm != CODEX_CONFIRM_UNPAIR) {
+            model->confirm = CODEX_CONFIRM_UNPAIR;
+            return;
+        }
+        model->confirm = CODEX_CONFIRM_NONE;
+        model->settings_open = false;
+        if (action != NULL) action->kind = CODEX_ACTION_UNPAIR;
+        return;
+    }
+    if (model->confirm != CODEX_CONFIRM_RESET) {
+        model->confirm = CODEX_CONFIRM_RESET;
+        return;
+    }
+    model->confirm = CODEX_CONFIRM_NONE;
+    model->settings_open = false;
+    model->brightness = 2;
+    model->ble_enabled = true;
+    if (action != NULL) {
+        action->kind = CODEX_ACTION_RESET_PREFS;
+        action->ble_enable = true;
+    }
+}
+
 void codex_model_on_key(codex_model_t *model, codex_key_t key, uint32_t now_ms, codex_action_t *action)
 {
     bool was_dim;
@@ -160,10 +253,6 @@ void codex_model_on_key(codex_model_t *model, codex_key_t key, uint32_t now_ms, 
     model->forced_dim = false;
     if (was_dim) return;
 
-    if (key == CODEX_KEY_OK_LONG) {
-        model->forced_dim = true;
-        return;
-    }
     if (model->prompt_active && key == CODEX_KEY_UP) {
         decide(model, "accept", now_ms, action);
         return;
@@ -172,8 +261,39 @@ void codex_model_on_key(codex_model_t *model, codex_key_t key, uint32_t now_ms, 
         decide(model, "cancel", now_ms, action);
         return;
     }
-    if (key == CODEX_KEY_OK && !model->prompt_active && !model->passkey_visible) {
-        model->info_page = !model->info_page;
+    if (model->prompt_active || model->passkey_visible) return;
+
+    if (key == CODEX_KEY_OK_LONG) {
+        if (model->settings_open) close_settings(model);
+        else model->settings_open = true;
+        return;
+    }
+    if (model->settings_open) {
+        if (key == CODEX_KEY_UP) {
+            move_setting(model, -1);
+            return;
+        }
+        if (key == CODEX_KEY_DOWN) {
+            if (model->confirm != CODEX_CONFIRM_NONE) {
+                model->confirm = CODEX_CONFIRM_NONE;
+                return;
+            }
+            move_setting(model, 1);
+            return;
+        }
+        if (key == CODEX_KEY_OK) activate_setting(model, now_ms, action);
+        return;
+    }
+    if (key == CODEX_KEY_OK) {
+        model->page = (codex_page_t)(((int)model->page + 1) % CODEX_PAGE_COUNT);
+        return;
+    }
+    if (model->page == CODEX_PAGE_INFO && (key == CODEX_KEY_UP || key == CODEX_KEY_DOWN)) {
+        int delta = key == CODEX_KEY_DOWN ? 1 : -1;
+        int next = (int)model->info + delta;
+        if (next < 0) next = CODEX_INFO_COUNT - 1;
+        if (next >= CODEX_INFO_COUNT) next = 0;
+        model->info = (codex_info_t)next;
     }
 }
 

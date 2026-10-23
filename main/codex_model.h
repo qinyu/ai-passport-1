@@ -49,7 +49,43 @@ typedef enum {
     CODEX_ACTION_ACK,
     CODEX_ACTION_STATUS,
     CODEX_ACTION_UNPAIR,
+    CODEX_ACTION_BLE_SET,
+    CODEX_ACTION_RESET_PREFS,
 } codex_action_kind_t;
+
+typedef enum {
+    CODEX_PAGE_DASH = 0,
+    CODEX_PAGE_PET,
+    CODEX_PAGE_INFO,
+    CODEX_PAGE_COUNT,
+} codex_page_t;
+
+typedef enum {
+    CODEX_INFO_ABOUT = 0,
+    CODEX_INFO_BUTTONS,
+    CODEX_INFO_DEVICE,
+    CODEX_INFO_BLE,
+    CODEX_INFO_CREDITS,
+    CODEX_INFO_COUNT,
+} codex_info_t;
+
+typedef enum {
+    CODEX_SET_BRIGHT = 0,
+    CODEX_SET_SOUND,
+    CODEX_SET_BLE,
+    CODEX_SET_WIFI,
+    CODEX_SET_LED,
+    CODEX_SET_CLOCK,
+    CODEX_SET_UNPAIR,
+    CODEX_SET_RESET,
+    CODEX_SET_COUNT,
+} codex_setting_t;
+
+typedef enum {
+    CODEX_CONFIRM_NONE = 0,
+    CODEX_CONFIRM_UNPAIR,
+    CODEX_CONFIRM_RESET,
+} codex_confirm_t;
 
 typedef struct {
     codex_action_kind_t kind;
@@ -57,6 +93,7 @@ typedef struct {
     char decision[8];
     char ack_cmd[CODEX_CMD_MAX];
     bool ack_ok;
+    bool ble_enable;
 } codex_action_t;
 
 typedef struct {
@@ -89,7 +126,16 @@ typedef struct {
     bool forced_dim;
     bool input_seen;
     uint32_t last_input_ms;
-    bool info_page;
+    codex_page_t page;
+    codex_info_t info;
+    bool settings_open;
+    codex_setting_t setting;
+    codex_confirm_t confirm;
+    uint8_t brightness;
+    bool ble_enabled;
+    char device_name[16];
+    char mac[18];
+    char fw_version[32];
     int battery_percent;
     int battery_mv;
 } codex_model_t;
@@ -100,6 +146,11 @@ void codex_model_note_input(codex_model_t *model, uint32_t now_ms);
 void codex_model_set_link(codex_model_t *model, bool up, bool encrypted);
 void codex_model_set_passkey(codex_model_t *model, bool visible, uint32_t passkey);
 void codex_model_set_battery(codex_model_t *model, int percent, int mv);
+void codex_model_set_prefs(codex_model_t *model, uint8_t brightness, bool ble_enabled);
+void codex_model_set_identity(codex_model_t *model, const char *name, const char *mac,
+                              const char *version);
+uint8_t codex_brightness_percent(uint8_t level);
+bool codex_setting_available(codex_setting_t item);
 void codex_model_apply_packet(codex_model_t *model, const codex_packet_t *packet,
                               uint32_t now_ms, codex_action_t *action);
 void codex_model_tick(codex_model_t *model, uint32_t now_ms);

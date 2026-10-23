@@ -47,6 +47,8 @@ static bool s_line_overflow;
 static codex_ble_cb_t s_cb;
 static void *s_ctx;
 static bool s_started;
+static bool s_radio_on = true;
+static char s_mac[18] = "--";
 
 static int gap_event(struct ble_gap_event *event, void *arg);
 static int gatt_access(uint16_t conn_handle, uint16_t attr_handle,
@@ -159,7 +161,13 @@ static void advertise(void)
     params.conn_mode = BLE_GAP_CONN_MODE_UND;
     params.disc_mode = BLE_GAP_DISC_MODE_GEN;
     rc = ble_gap_adv_start(s_addr_type, NULL, BLE_HS_FOREVER, &params, gap_event, NULL);
-    if (rc != 0) ESP_LOGE(TAG, "advertise failed: %d", rc);
+    if (rc != 0 && rc != BLE_HS_EALREADY) ESP_LOGE(TAG, "advertise failed: %d", rc);
+}
+
+static void advertise_if_allowed(void)
+{
+    if (!s_radio_on) return;
+    advertise();
 }
 
 static bool link_is_secure(const struct ble_gap_conn_desc *desc)
@@ -181,7 +189,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
             s_line_overflow = false;
             emit_link();
         } else {
-            advertise();
+            advertise_if_allowed();
         }
         return 0;
     case BLE_GAP_EVENT_DISCONNECT:
@@ -189,10 +197,10 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         s_subscribed = false;
         s_encrypted = false;
         emit_link();
-        advertise();
+        advertise_if_allowed();
         return 0;
     case BLE_GAP_EVENT_ADV_COMPLETE:
-        advertise();
+        advertise_if_allowed();
         return 0;
     case BLE_GAP_EVENT_ENC_CHANGE:
         if (ble_gap_conn_find(event->enc_change.conn_handle, &desc) == 0) {
@@ -249,10 +257,12 @@ static void on_sync(void)
     if (rc == 0) rc = ble_hs_id_copy_addr(s_addr_type, addr, NULL);
     if (rc == 0) {
         snprintf(s_name, sizeof s_name, "Codex-%02X%02X", addr[1], addr[0]);
+        snprintf(s_mac, sizeof s_mac, "%02X:%02X:%02X:%02X:%02X:%02X",
+                 addr[5], addr[4], addr[3], addr[2], addr[1], addr[0]);
         ble_svc_gap_device_name_set(s_name);
         ESP_LOGI(TAG, "advertising %s", s_name);
     }
-    advertise();
+    advertise_if_allowed();
 }
 
 static void host_task(void *param)
@@ -346,10 +356,31 @@ esp_err_t codex_ble_disconnect(void)
     return ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM) == 0 ? ESP_OK : ESP_FAIL;
 }
 
+esp_err_t codex_ble_set_enabled(bool enabled)
+{
+    s_radio_on = enabled;
+    if (!s_started) return ESP_OK;
+    if (!enabled) {
+        (void)ble_gap_adv_stop();
+        if (s_conn != BLE_HS_CONN_HANDLE_NONE) {
+            (void)ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
+        }
+        return ESP_OK;
+    }
+    if (s_conn == BLE_HS_CONN_HANDLE_NONE) advertise_if_allowed();
+    return ESP_OK;
+}
+
 void codex_ble_copy_name(char *out, size_t out_size)
 {
     if (out == NULL || out_size == 0) return;
     snprintf(out, out_size, "%s", s_name);
+}
+
+void codex_ble_copy_mac(char *out, size_t out_size)
+{
+    if (out == NULL || out_size == 0) return;
+    snprintf(out, out_size, "%s", s_mac);
 }
 
 bool codex_ble_is_secure(void)

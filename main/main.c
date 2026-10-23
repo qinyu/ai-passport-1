@@ -1,6 +1,7 @@
 // Codex Buddy for FoloToy AI Passport. The baseline hardware-test menu is not started.
 #include "codex_ble.h"
 #include "codex_model.h"
+#include "codex_prefs.h"
 #include "codex_protocol.h"
 #include "codex_ui.h"
 #include "key_guard.h"
@@ -11,6 +12,7 @@
 #include "bsp_i2c.h"
 #include "bsp_pins.h"
 
+#include "esp_app_desc.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
 #include "esp_timer.h"
@@ -42,6 +44,8 @@ static key_guard_t s_key_guard;
 static codex_model_t s_model;
 static volatile bool s_input_ready;
 static uint32_t s_last_battery_ms;
+static uint8_t s_saved_brightness = 2;
+static bool s_saved_ble = true;
 
 static uint32_t now_ms(void)
 {
@@ -108,14 +112,38 @@ static void send_action(const codex_action_t *action)
             err = ESP_FAIL;
         }
         (void)codex_ble_disconnect();
+    } else if (action->kind == CODEX_ACTION_BLE_SET) {
+        err = codex_ble_set_enabled(action->ble_enable);
+    } else if (action->kind == CODEX_ACTION_RESET_PREFS) {
+        err = codex_prefs_reset();
+        err = codex_ble_set_enabled(true);
     }
     if (err != ESP_OK) ESP_LOGW(TAG, "BLE reply failed: %s", esp_err_to_name(err));
 }
 
+static void save_prefs_if_needed(void)
+{
+    codex_prefs_t prefs;
+    if (s_model.brightness == s_saved_brightness && s_model.ble_enabled == s_saved_ble) return;
+    prefs.brightness = s_model.brightness;
+    prefs.ble_enabled = s_model.ble_enabled;
+    if (codex_prefs_save(&prefs) == ESP_OK) {
+        s_saved_brightness = s_model.brightness;
+        s_saved_ble = s_model.ble_enabled;
+    }
+}
+
 static void refresh(uint32_t now)
 {
+    char name[16];
+    char mac[18];
     bool dim = codex_model_is_dim(&s_model, now);
-    bsp_display_backlight(dim ? 8 : 70);
+    uint8_t light = dim ? 8 : codex_brightness_percent(s_model.brightness);
+    const esp_app_desc_t *app = esp_app_get_description();
+    bsp_display_backlight(light);
+    codex_ble_copy_name(name, sizeof name);
+    codex_ble_copy_mac(mac, sizeof mac);
+    codex_model_set_identity(&s_model, name, mac, app != NULL ? app->version : "");
     if (!bsp_lvgl_lock(200)) return;
     codex_ui_apply(&s_model, now);
     bsp_lvgl_unlock();
@@ -160,6 +188,7 @@ static void app_task(void *param)
                 codex_action_t action;
                 codex_model_on_key(&s_model, map_key(evt.btn, evt.event), now, &action);
                 send_action(&action);
+                save_prefs_if_needed();
             } else if (evt.type == APP_EVT_BLE) {
                 handle_ble(&evt.ble, now);
             }
@@ -188,6 +217,12 @@ void app_main(void)
     }
 
     codex_model_init(&s_model);
+    {
+        codex_prefs_t prefs = {.brightness = 2, .ble_enabled = true};
+        if (codex_prefs_load(&prefs) == ESP_OK) codex_model_set_prefs(&s_model, prefs.brightness, prefs.ble_enabled);
+        s_saved_brightness = s_model.brightness;
+        s_saved_ble = s_model.ble_enabled;
+    }
     codex_model_note_input(&s_model, now_ms());
     if (bsp_battery_init() == ESP_OK) {
         codex_model_set_battery(&s_model, bsp_battery_soc(), bsp_battery_mv());
@@ -199,7 +234,7 @@ void app_main(void)
         codex_ui_apply(&s_model, now_ms());
         bsp_lvgl_unlock();
     }
-    bsp_display_backlight(70);
+    bsp_display_backlight(codex_brightness_percent(s_model.brightness));
 
     s_queue = xQueueCreate(APP_QUEUE_DEPTH, sizeof(app_evt_t));
     button_err = bsp_button_init(on_key, NULL);
@@ -208,6 +243,7 @@ void app_main(void)
         key_guard_sync_released(&s_key_guard, bsp_button_read_mv() >= BSP_BTN_MV_RELEASED_MIN);
     }
 
+    (void)codex_ble_set_enabled(s_model.ble_enabled);
     if (codex_ble_start(on_ble, NULL) != ESP_OK) ESP_LOGE(TAG, "BLE did not start");
     s_input_ready = true;
     if (xTaskCreate(app_task, "codex_app", 8192, NULL, 5, NULL) != pdPASS) {

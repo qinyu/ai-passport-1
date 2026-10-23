@@ -1,9 +1,12 @@
+/* Page geometry below is a provisional stack so the layout can be restyled
+ * after a direction is chosen. Do not treat coordinates or the 16/20 sizes as final. */
 #include "codex_ui.h"
 
 #include "codex_font.h"
 #include "codex_pet.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #define BG 0x122033
 #define CARD 0x1C3148
@@ -128,6 +131,106 @@ static void paint_meter(lv_obj_t *bar, lv_obj_t *pct, lv_obj_t *reset, uint8_t p
     label_font(reset, &codex_font_16, reset_color(urgency));
 }
 
+static const char *page_title(const codex_model_t *model)
+{
+    if (model->settings_open) return "设置";
+    if (model->page == CODEX_PAGE_PET) return "姿态";
+    if (model->page == CODEX_PAGE_INFO) return "信息";
+    return "用量";
+}
+
+static const char *bright_name(uint8_t level)
+{
+    static const char *names[] = {"低", "中", "高", "最亮"};
+    if (level > 3) level = 3;
+    return names[level];
+}
+
+static void append_setting(char *out, size_t out_size, const codex_model_t *model, codex_setting_t item)
+{
+    char line[48];
+    const char *mark = item == model->setting ? ">" : " ";
+    const char *name = "不适用";
+    const char *value = "不适用";
+    size_t used = strlen(out);
+    switch (item) {
+    case CODEX_SET_BRIGHT:
+        name = "亮度";
+        value = bright_name(model->brightness);
+        break;
+    case CODEX_SET_SOUND:
+        name = "声音";
+        break;
+    case CODEX_SET_BLE:
+        name = "蓝牙";
+        value = model->ble_enabled ? "开" : "关";
+        break;
+    case CODEX_SET_WIFI:
+        name = "无线";
+        break;
+    case CODEX_SET_LED:
+        name = "指示灯";
+        break;
+    case CODEX_SET_CLOCK:
+        name = "时钟";
+        break;
+    case CODEX_SET_UNPAIR:
+        name = "解除配对";
+        value = model->confirm == CODEX_CONFIRM_UNPAIR ? "再按确定" : "";
+        break;
+    case CODEX_SET_RESET:
+        name = "恢复设置";
+        value = model->confirm == CODEX_CONFIRM_RESET ? "再按确定" : "";
+        break;
+    default:
+        break;
+    }
+    snprintf(line, sizeof line, "%s%s %s\n", mark, name, value);
+    if (used + 1 < out_size) snprintf(out + used, out_size - used, "%s", line);
+}
+
+static void fill_sheet(const codex_model_t *model, char *out, size_t out_size)
+{
+    const char *shown = model->device_name[0] ? model->device_name : "--";
+    const char *mac = model->mac[0] ? model->mac : "--";
+    const char *version = model->fw_version[0] ? model->fw_version : "--";
+    if (model->settings_open) {
+        out[0] = '\0';
+        append_setting(out, out_size, model, CODEX_SET_BRIGHT);
+        append_setting(out, out_size, model, CODEX_SET_SOUND);
+        append_setting(out, out_size, model, CODEX_SET_BLE);
+        append_setting(out, out_size, model, CODEX_SET_WIFI);
+        append_setting(out, out_size, model, CODEX_SET_LED);
+        append_setting(out, out_size, model, CODEX_SET_CLOCK);
+        append_setting(out, out_size, model, CODEX_SET_UNPAIR);
+        append_setting(out, out_size, model, CODEX_SET_RESET);
+        return;
+    }
+    switch (model->info) {
+    case CODEX_INFO_BUTTONS:
+        snprintf(out, out_size, "按键\n确定翻页\n长按打开设置\n上下切换\n上允许\n下拒绝");
+        break;
+    case CODEX_INFO_DEVICE: {
+        char bat[16];
+        if (model->battery_percent < 0) snprintf(bat, sizeof bat, "--");
+        else snprintf(bat, sizeof bat, "%d%%", model->battery_percent);
+        snprintf(out, out_size, "设备\n版本 %s\n电量 %s\n地址 %s", version, bat, mac);
+        break;
+    }
+    case CODEX_INFO_BLE:
+        snprintf(out, out_size, "蓝牙\n%s\n六位配对码\n在电脑上输入",
+                 model->link_up ? (model->encrypted ? "已加密" : "未加密") : "未连接");
+        break;
+    case CODEX_INFO_CREDITS:
+        snprintf(out, out_size, "署名\nCodex 伙伴\n来自 Stick 移植");
+        break;
+    case CODEX_INFO_ABOUT:
+    default:
+        snprintf(out, out_size, "关于\n名称 %s\n版本 %s", shown, version);
+        break;
+    }
+}
+
 static void show_modal(bool visible)
 {
     if (visible) lv_obj_remove_flag(s_ui.modal, LV_OBJ_FLAG_HIDDEN);
@@ -205,8 +308,8 @@ void codex_ui_create(void)
     lv_obj_set_pos(s_ui.footer, 16, 292);
 
     s_ui.info = lv_obj_create(s_ui.screen);
-    lv_obj_set_size(s_ui.info, 208, 100);
-    lv_obj_set_pos(s_ui.info, 16, 100);
+    lv_obj_set_size(s_ui.info, 208, 188);
+    lv_obj_set_pos(s_ui.info, 16, 96);
     lv_obj_set_style_bg_color(s_ui.info, lv_color_hex(CARD), 0);
     lv_obj_set_style_radius(s_ui.info, 14, 0);
     lv_obj_set_style_border_width(s_ui.info, 0, 0);
@@ -243,7 +346,7 @@ void codex_ui_create(void)
 void codex_ui_apply(const codex_model_t *model, uint32_t now_ms)
 {
     char battery[16];
-    char info[160];
+    char info[384];
     int fill;
     codex_pose_t pose;
     if (model == NULL || s_ui.screen == NULL) return;
@@ -251,6 +354,7 @@ void codex_ui_apply(const codex_model_t *model, uint32_t now_ms)
     pose = codex_model_pose(model, now_ms);
     lv_label_set_text(s_ui.status, status_text(model));
     label_font(s_ui.status, &codex_font_16, model->stale ? ORANGE : INK);
+    lv_label_set_text(s_ui.title, page_title(model));
     lv_label_set_text(s_ui.state, pose_text(pose));
     codex_pet_set_pose(&s_ui.pet, pose);
 
@@ -275,17 +379,19 @@ void codex_ui_apply(const codex_model_t *model, uint32_t now_ms)
     paint_meter(s_ui.secondary_bar, s_ui.secondary_pct, s_ui.secondary_reset, model->secondary,
                 model->secondary_label, now_ms, model, true);
 
-    if (model->info_page && !model->prompt_active && !model->passkey_visible) {
+    if ((model->settings_open || model->page == CODEX_PAGE_INFO) && !model->passkey_visible) {
         lv_obj_add_flag(s_ui.pet.root, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_ui.usage, LV_OBJ_FLAG_HIDDEN);
         lv_obj_remove_flag(s_ui.info, LV_OBJ_FLAG_HIDDEN);
-        snprintf(info, sizeof info, "令牌 %lu\n%s\n允许 %lu\n拒绝 %lu",
-                 (unsigned long)model->tokens,
-                 model->encrypted ? "已加密" : "未加密",
-                 (unsigned long)model->approvals,
-                 (unsigned long)model->denials);
+        fill_sheet(model, info, sizeof info);
         lv_label_set_text(s_ui.info_text, info);
+    } else if (model->page == CODEX_PAGE_PET) {
+        lv_obj_remove_flag(s_ui.pet.root, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_ui.usage, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_ui.info, LV_OBJ_FLAG_HIDDEN);
     } else {
         lv_obj_remove_flag(s_ui.pet.root, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(s_ui.usage, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(s_ui.info, LV_OBJ_FLAG_HIDDEN);
     }
 
@@ -309,8 +415,13 @@ void codex_ui_apply(const codex_model_t *model, uint32_t now_ms)
         show_modal(false);
     }
 
-    if (!model->packet_seen && model->link_up) lv_label_set_text(s_ui.footer, "暂无数据");
-    else lv_label_set_text(s_ui.footer, "用量  上允许  下拒绝");
+    if (model->prompt_active) lv_label_set_text(s_ui.footer, "上允许  下拒绝");
+    else if (model->settings_open && model->confirm != CODEX_CONFIRM_NONE) {
+        lv_label_set_text(s_ui.footer, "确定确认  下键取消");
+    } else if (model->settings_open) lv_label_set_text(s_ui.footer, "上下选择  确定执行");
+    else if (model->page == CODEX_PAGE_INFO) lv_label_set_text(s_ui.footer, "上下切换  确定翻页");
+    else if (!model->packet_seen && model->link_up) lv_label_set_text(s_ui.footer, "暂无数据");
+    else lv_label_set_text(s_ui.footer, "确定翻页  长按设置");
 }
 
 void codex_ui_destroy(void)
