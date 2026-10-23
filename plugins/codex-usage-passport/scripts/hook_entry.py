@@ -40,11 +40,11 @@ def append_log(record: dict[str, Any]) -> None:
         pass
 
 
-def read_stdin_text() -> str:
+def read_stdin_text(wait_sec: float = 2.0) -> str:
     try:
         if sys.stdin is None or sys.stdin.closed or sys.stdin.isatty():
             return ""
-        ready, _, _ = select.select([sys.stdin], [], [], 0)
+        ready, _, _ = select.select([sys.stdin], [], [], wait_sec)
         if not ready:
             return ""
         return sys.stdin.read(65536)

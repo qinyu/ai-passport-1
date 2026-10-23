@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import os
 import subprocess
 import sys
@@ -25,25 +26,31 @@ def pid_alive(pid: int) -> bool:
 
 def main() -> int:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    if PID_PATH.exists():
-        try:
-            pid = int(PID_PATH.read_text().strip())
-        except ValueError:
-            pid = 0
-        if pid and pid_alive(pid):
-            print(f"bridge already running pid={pid}")
-            return 0
-    log = LOG_PATH.open("a", encoding="utf-8")
-    proc = subprocess.Popen(
-        [sys.executable, str(BRIDGE)],
-        cwd=str(BRIDGE.parent),
-        stdout=log,
-        stderr=log,
-        start_new_session=True,
-    )
-    PID_PATH.write_text(str(proc.pid))
-    print(f"bridge started pid={proc.pid}")
-    return 0
+    lock = (STATE_DIR / "bridge.lock").open("a", encoding="utf-8")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if PID_PATH.exists():
+            try:
+                pid = int(PID_PATH.read_text().strip())
+            except ValueError:
+                pid = 0
+            if pid and pid_alive(pid):
+                print(f"bridge already running pid={pid}")
+                return 0
+        log = LOG_PATH.open("a", encoding="utf-8")
+        proc = subprocess.Popen(
+            [sys.executable, str(BRIDGE)],
+            cwd=str(BRIDGE.parent),
+            stdout=log,
+            stderr=log,
+            start_new_session=True,
+        )
+        PID_PATH.write_text(str(proc.pid))
+        print(f"bridge started pid={proc.pid}")
+        return 0
+    finally:
+        fcntl.flock(lock, fcntl.LOCK_UN)
+        lock.close()
 
 
 if __name__ == "__main__":

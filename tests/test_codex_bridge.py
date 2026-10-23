@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import socket
 import sys
 from pathlib import Path
 
@@ -20,7 +22,9 @@ from codex_bridge_core import (  # noqa: E402
     prompt_packet,
     reduce_rollout_lines,
     roll_reset_at,
+    short_text,
 )
+from codex_usage_ble_bridge import Bridge  # noqa: E402
 
 
 def expect(cond: bool, what: str) -> None:
@@ -75,7 +79,72 @@ def main() -> None:
     expect(tool == "Bash" and hint == "echo hi", "hook prompt")
     shown = prompt_packet("h1", tool, hint)
     expect(shown["prompt"]["id"] == "h1", "prompt id")
+    clipped = short_text("echo build && rm -rf ~/project and then more", "fallback", 43)
+    expect(clipped.endswith("...") and len(clipped) == 43, "ellipsis stays inside the limit")
+    expect(short_text("echo hi", "fallback", 43) == "echo hi", "short text unchanged")
+    asyncio.run(check_approval_paths())
     print("test_codex_bridge: PASS")
+
+
+class _Gatt:
+    def __init__(self, mtu: int, connected: bool = True, fail: bool = False) -> None:
+        self.mtu_size = mtu
+        self.is_connected = connected
+        self.fail = fail
+        self.writes: list[bytes] = []
+
+    async def write_gatt_char(self, _uuid: str, data: bytes, response: bool = False) -> None:
+        del response
+        if self.fail:
+            raise ConnectionError("write failed")
+        self.writes.append(bytes(data))
+
+
+class _Args:
+    verbose = False
+
+
+async def _exchange(bridge: Bridge, payload: bytes) -> bytes:
+    left, right = socket.socketpair()
+    left.setblocking(False)
+    right.setblocking(False)
+    loop = asyncio.get_running_loop()
+    await loop.sock_sendall(right, payload)
+    task = asyncio.create_task(bridge._approval_client(left))
+    received = bytearray()
+    while b"\n" not in received:
+        piece = await asyncio.wait_for(loop.sock_recv(right, 256), 1.0)
+        if not piece:
+            break
+        received.extend(piece)
+    await asyncio.wait_for(task, 1.0)
+    right.close()
+    return bytes(received)
+
+
+async def check_approval_paths() -> None:
+    offline = Bridge(_Args())
+    offline.client = None
+    reply = await _exchange(offline, b'{"type":"permission_request","hook":{},"timeout":45}\n')
+    expect(b'"reason":"offline"' in reply, "offline fails fast")
+    expect(not offline.hub._pending and not offline.hub._queue, "offline does not queue")
+
+    failing = Bridge(_Args())
+    failing.client = _Gatt(23, fail=True)
+    task = asyncio.create_task(
+        _exchange(failing, b'{"type":"permission_request","hook":{"tool_name":"Bash"},"timeout":45}\n')
+    )
+    await asyncio.wait_for(task, 1.0)
+    expect(not failing.hub._pending and not failing.hub._queue, "failed write clears the hub")
+    expect(failing.hub.current() is None, "failed write does not stay current")
+
+    gatt = _Gatt(23)
+    bridge = Bridge(_Args())
+    bridge.client = gatt
+    await bridge.write_json({"state": "busy", "primary": 1, "pad": "x" * 40})
+    expect(len(gatt.writes) > 1, "mtu splits the write")
+    expect(all(len(chunk) <= 20 for chunk in gatt.writes), "chunks fit the default mtu")
+    expect(b"".join(gatt.writes).endswith(b"\n"), "chunked write keeps the newline")
 
 
 if __name__ == "__main__":

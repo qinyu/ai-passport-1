@@ -335,12 +335,15 @@ esp_err_t codex_ble_send(const char *json)
     return ESP_OK;
 }
 
-esp_err_t codex_ble_forget(void)
+esp_err_t codex_ble_clear_bonds(void)
 {
-    if (s_conn != BLE_HS_CONN_HANDLE_NONE) {
-        ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
-    }
     return ble_store_clear() == 0 ? ESP_OK : ESP_FAIL;
+}
+
+esp_err_t codex_ble_disconnect(void)
+{
+    if (s_conn == BLE_HS_CONN_HANDLE_NONE) return ESP_OK;
+    return ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM) == 0 ? ESP_OK : ESP_FAIL;
 }
 
 void codex_ble_copy_name(char *out, size_t out_size)

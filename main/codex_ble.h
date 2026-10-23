@@ -28,6 +28,8 @@ typedef void (*codex_ble_cb_t)(const codex_ble_evt_t *event, void *ctx);
 
 esp_err_t codex_ble_start(codex_ble_cb_t cb, void *ctx);
 esp_err_t codex_ble_send(const char *json);
-esp_err_t codex_ble_forget(void);
+/* Clear stored bonds without dropping the link. The caller sends the ack, then disconnects. */
+esp_err_t codex_ble_clear_bonds(void);
+esp_err_t codex_ble_disconnect(void);
 void codex_ble_copy_name(char *out, size_t out_size);
 bool codex_ble_is_secure(void);

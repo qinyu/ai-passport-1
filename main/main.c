@@ -100,10 +100,14 @@ static void send_action(const codex_action_t *action)
                                        s_model.approvals, s_model.denials) != 0) return;
         err = codex_ble_send(json);
     } else if (action->kind == CODEX_ACTION_UNPAIR) {
-        err = codex_ble_forget();
+        err = codex_ble_clear_bonds();
         if (codex_protocol_ack_json(json, sizeof json, "unpair", err == ESP_OK) == 0) {
-            (void)codex_ble_send(json);
+            esp_err_t send_err = codex_ble_send(json);
+            if (send_err != ESP_OK) err = send_err;
+        } else {
+            err = ESP_FAIL;
         }
+        (void)codex_ble_disconnect();
     }
     if (err != ESP_OK) ESP_LOGW(TAG, "BLE reply failed: %s", esp_err_to_name(err));
 }

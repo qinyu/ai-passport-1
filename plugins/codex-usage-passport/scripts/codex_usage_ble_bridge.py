@@ -175,10 +175,15 @@ class Bridge:
         return snapshot.packet(state)
 
     async def write_json(self, payload: dict[str, Any]) -> None:
-        if self.client is None:
+        client = self.client
+        if client is None:
             return
         raw = (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
-        await self.client.write_gatt_char(NUS_RX, raw, response=False)
+        # Write-without-response is limited to MTU - 3. Default ATT MTU is 23.
+        mtu = int(getattr(client, "mtu_size", 23) or 23)
+        chunk = max(20, min(180, mtu - 3))
+        for start in range(0, len(raw), chunk):
+            await client.write_gatt_char(NUS_RX, raw[start : start + chunk], response=False)
 
     def handle_notify(self, _sender: Any, data: bytearray) -> None:
         self.buffer.extend(data)
@@ -230,22 +235,34 @@ class Bridge:
                 if not piece:
                     break
                 chunks.extend(piece)
+            if not chunks or b"\n" not in chunks:
+                return
             request = json.loads(chunks.decode("utf-8", errors="replace").splitlines()[0])
+            if self.client is None or not getattr(self.client, "is_connected", False):
+                await loop.sock_sendall(client, b'{"ok":false,"reason":"offline"}\n')
+                return
             hook = request.get("hook") if isinstance(request.get("hook"), dict) else {}
             timeout = float(request.get("timeout") or 45)
             future: asyncio.Future[str] = loop.create_future()
             tool, hint = prompt_from_hook(hook)
             prompt_id = self.hub.add(future, tool, hint)
-            if self.hub.current() == prompt_id:
-                await self.write_json(prompt_packet(prompt_id, tool, hint))
             try:
+                if self.hub.current() == prompt_id:
+                    await self.write_json(prompt_packet(prompt_id, tool, hint))
                 decision = await asyncio.wait_for(future, timeout)
             except asyncio.TimeoutError:
-                self.hub.resolve(prompt_id, "cancel")
-                response = {"ok": False, "reason": "timeout"}
+                response: dict[str, Any] = {"ok": False, "reason": "timeout"}
             else:
                 behavior = hook_behavior(decision)
-                response = {"ok": True, "decision": behavior} if behavior else {"ok": False, "reason": "decision"}
+                response = (
+                    {"ok": True, "decision": behavior}
+                    if behavior
+                    else {"ok": False, "reason": "decision"}
+                )
+            finally:
+                # Drop the entry even when the first write raises, so later
+                # prompts are not stuck behind it until the bridge restarts.
+                self.hub.resolve(prompt_id, "cancel")
             await self.write_json(clear_prompt_packet())
             nxt = self.hub.current()
             if nxt is not None:

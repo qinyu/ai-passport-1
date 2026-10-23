@@ -234,9 +234,13 @@ def choose_state(
 
 def short_text(value: Any, fallback: str, limit: int) -> str:
     text = str(value if value not in (None, "") else fallback).replace("\n", " ").strip()
+    if limit <= 0:
+        return ""
     if len(text) <= limit:
         return text
-    return text[:limit]
+    if limit <= 3:
+        return text[:limit]
+    return text[: limit - 3] + "..."
 
 
 def prompt_packet(prompt_id: str, tool: str, hint: str) -> dict[str, Any]:
