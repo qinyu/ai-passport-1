@@ -1,16 +1,15 @@
 idf_component_register(
     SRCS "main.c"
-         "demo_navigation.c"
-         "ui_pixel.c"
-         "ui_pixel_math.c"
-         "demo_display.c"
-         "demo_button.c"
-         "demo_audio.c"
-         "demo_battery.c"
-         "demo_radio.c"
-         "demo_wifi.c"
-         "demo_ble.c"
-         "demo_low_power.c"
+         "codex_protocol.c"
+         "codex_model.c"
+         "codex_ble.c"
+         "codex_pet.c"
+         "codex_ui.c"
     INCLUDE_DIRS "."
-    REQUIRES bsp bt esp_event esp_hw_support esp_netif esp_timer esp_wifi nvs_flash
+    REQUIRES bsp bt nvs_flash esp_timer esp_hw_support
+)
+
+target_sources(${COMPONENT_LIB} PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/../assets/fonts/codex_font_16.c"
+    "${CMAKE_CURRENT_LIST_DIR}/../assets/fonts/codex_font_20.c"
 )

@@ -17,6 +17,16 @@ Store reusable font files and generated font sources in `fonts/`.
 - Check Flash and internal-RAM impact before adding a font; the ESP32-C3 has no PSRAM.
 - Do not commit fonts whose license does not permit redistribution.
 
+### Codex Buddy subset
+
+| File | Size and format | Source and use |
+| --- | --- | --- |
+| [`fonts/codex_font_16.c`](fonts/codex_font_16.c) | 16 px, 4 bpp, uncompressed LVGL bitmap | Fixed Codex Buddy UI. |
+| [`fonts/codex_font_20.c`](fonts/codex_font_20.c) | 20 px, 4 bpp, uncompressed LVGL bitmap | Title and pose labels on the same screen. |
+| [`fonts/codex_buddy_symbols.txt`](fonts/codex_buddy_symbols.txt) | One line of required characters | Inventory checked by `tests/test_codex_font_coverage.py`. |
+
+Both sizes also include printable ASCII `U+0020` through `U+007E`. The source face is WenQuanYi Micro Hei 0.2.0-beta, licensed Apache-2.0 or GPL-3.0 with the font exception. The full face is not committed. Regenerate with `lv_font_conv` 1.5.3 via [`../tools/gen_codex_font.sh`](../tools/gen_codex_font.sh). `main/CMakeLists.txt` compiles the `.c` files into the application, and the widgets select `codex_font_16` or `codex_font_20` directly. The two files are about 80 KB and 115 KB in flash. They are constant bitmaps, not a RAM-loaded face. Dynamic approval hints outside this inventory are not covered.
+
 ## Images
 
 Store reusable source images and generated display assets in `images/`.

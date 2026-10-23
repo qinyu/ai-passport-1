@@ -1,0 +1,17 @@
+{
+  "name": "codex-usage-passport",
+  "version": "0.1.0",
+  "description": "Starts a local BLE bridge that shows Codex usage and permission prompts on a FoloToy AI Passport.",
+  "license": "Apache-2.0",
+  "keywords": ["codex", "ble", "passport", "usage"],
+  "hooks": "./hooks.json",
+  "interface": {
+    "displayName": "Codex Usage Passport",
+    "shortDescription": "Passport companion for Codex usage and approvals",
+    "longDescription": "Starts a local Python BLE bridge. The bridge reads local Codex usage and forwards permission prompts to an AI Passport running the Codex Buddy firmware. Nothing is sent to an external server.",
+    "developerName": "qinyu",
+    "category": "Engineering",
+    "capabilities": ["Interactive", "Read"],
+    "brandColor": "#1F8A70"
+  }
+}
