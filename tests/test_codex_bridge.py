@@ -22,6 +22,7 @@ from codex_bridge_core import (  # noqa: E402
     prompt_packet,
     reduce_rollout_lines,
     roll_reset_at,
+    session_origin,
     short_text,
 )
 from codex_usage_ble_bridge import Bridge  # noqa: E402
@@ -65,6 +66,10 @@ def main() -> None:
     expect(choose_state(snapshot, ActivityTracker(), now, forced="dizzy") == "dizzy", "forced")
 
     packet = snapshot.packet("busy", now=1_775_700_000)
+    expect(packet["agent"] == "PI" and packet["via"] == "pi", "default pi origin")
+    expect(snapshot.packet("busy", now=1_775_700_000, via="herdr")["via"] == "herdr", "herdr via")
+    expect(session_origin("/Users/yu/.pi/agent/sessions/a.jsonl") == "pi", "local pi path")
+    expect(session_origin("mobile-relay hdr herdr") == "herdr", "herdr marker")
     expect(packet["state"] == "busy" and packet["primary_label"] == "5h", "packet labels")
     expect(packet["secondary_label"] == "7d" and packet["now"] == 1_775_700_000, "packet now")
     expect(roll_reset_at(100, 50, 99) == 100, "future reset stays")

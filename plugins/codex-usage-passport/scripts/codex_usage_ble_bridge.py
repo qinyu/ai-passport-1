@@ -31,6 +31,7 @@ from codex_bridge_core import (
     prompt_from_hook,
     prompt_packet,
     reduce_rollout_lines,
+    session_origin,
 )
 
 
@@ -83,6 +84,7 @@ def read_usage(codex_home: Path, thread_limit: int, tail_bytes: int) -> UsageSna
         if snapshot is None:
             continue
         if best is None or (snapshot.event_ts or 0) >= (best.event_ts or 0):
+            snapshot.origin = session_origin(str(path))
             best = snapshot
     return best
 

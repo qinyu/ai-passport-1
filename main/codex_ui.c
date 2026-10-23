@@ -8,14 +8,16 @@
 #include <stdio.h>
 #include <string.h>
 
-#define BG 0x122033
-#define CARD 0x1C3148
-#define INK 0xF4F0E6
-#define MUTED 0x9BB0C3
-#define BLUE 0x4C8DFF
-#define GREEN 0x3DDC97
-#define ORANGE 0xFF9F43
-#define RED 0xFF5D73
+#define BG 0x071422
+#define CARD 0x10283C
+#define INK 0xE7F6FF
+#define MUTED 0x7BA8C4
+#define CYAN 0x3AD7FF
+#define TRACK 0x143044
+#define ORANGE 0xFFB15A
+#define RED 0xFF6B7A
+#define ROW_H 34
+#define ROW_N 8
 
 typedef struct {
     lv_obj_t *screen;
@@ -37,7 +39,8 @@ typedef struct {
     lv_obj_t *secondary_reset;
     lv_obj_t *footer;
     lv_obj_t *info;
-    lv_obj_t *info_text;
+    lv_obj_t *info_rows[ROW_N];
+    lv_obj_t *info_text[ROW_N];
     lv_obj_t *modal;
     lv_obj_t *modal_title;
     lv_obj_t *modal_body;
@@ -60,16 +63,9 @@ static lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font, const char 
     return label;
 }
 
-static uint32_t bar_color(codex_bar_band_t band)
-{
-    if (band == CODEX_BAR_GREEN) return GREEN;
-    if (band == CODEX_BAR_ORANGE) return ORANGE;
-    return BLUE;
-}
-
 static uint32_t reset_color(codex_reset_band_t band)
 {
-    if (band == CODEX_RESET_GREEN) return GREEN;
+    if (band == CODEX_RESET_GREEN) return CYAN;
     if (band == CODEX_RESET_ORANGE) return ORANGE;
     if (band == CODEX_RESET_RED) return RED;
     return MUTED;
@@ -101,11 +97,12 @@ static const char *status_text(const codex_model_t *model)
 
 static void style_bar(lv_obj_t *bar)
 {
-    lv_obj_set_size(bar, 128, 12);
+    lv_obj_set_size(bar, 216, 14);
     lv_bar_set_range(bar, 0, 100);
-    lv_obj_set_style_bg_color(bar, lv_color_hex(0x0E1C2C), LV_PART_MAIN);
-    lv_obj_set_style_radius(bar, 6, LV_PART_MAIN);
-    lv_obj_set_style_radius(bar, 6, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(bar, lv_color_hex(TRACK), LV_PART_MAIN);
+    lv_obj_set_style_radius(bar, 4, LV_PART_MAIN);
+    lv_obj_set_style_radius(bar, 4, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(bar, lv_color_hex(CYAN), LV_PART_INDICATOR);
     lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, LV_PART_INDICATOR);
 }
 
@@ -114,20 +111,23 @@ static void paint_meter(lv_obj_t *bar, lv_obj_t *pct, lv_obj_t *reset, uint8_t p
 {
     uint32_t remaining = 0;
     bool known = codex_reset_remaining(model, now_ms, secondary, &remaining);
-    char count[20];
+    char count[32];
     char pct_text[16];
     codex_bar_band_t band = codex_bar_band(percent);
     codex_reset_band_t urgency = codex_reset_band(label, remaining, known);
     lv_bar_set_value(bar, percent, LV_ANIM_OFF);
-    lv_obj_set_style_bg_color(bar, lv_color_hex(bar_color(band)), LV_PART_INDICATOR);
+    (void)band;
     snprintf(pct_text, sizeof pct_text, "%u%%", (unsigned)percent);
     lv_label_set_text(pct, pct_text);
-    codex_format_countdown(remaining, known, count, sizeof count);
-    {
-        char shown[32];
-        snprintf(shown, sizeof shown, "重置 %s", count);
-        lv_label_set_text(reset, shown);
+    if (!known) snprintf(count, sizeof count, "还剩 --");
+    else if (remaining / 86400u > 0) snprintf(count, sizeof count, "还剩 %u天", (unsigned)(remaining / 86400u));
+    else if (remaining >= 3600u) {
+        snprintf(count, sizeof count, "还剩 %u时%u分",
+                 (unsigned)(remaining / 3600u), (unsigned)((remaining % 3600u) / 60u));
+    } else {
+        snprintf(count, sizeof count, "还剩 %u分", (unsigned)(remaining / 60u));
     }
+    lv_label_set_text(reset, count);
     label_font(reset, &codex_font_16, reset_color(urgency));
 }
 
@@ -189,6 +189,8 @@ static void append_setting(char *out, size_t out_size, const codex_model_t *mode
     if (used + 1 < out_size) snprintf(out + used, out_size - used, "%s", line);
 }
 
+static const char *source_label(const codex_model_t *model);
+
 static void fill_sheet(const codex_model_t *model, char *out, size_t out_size)
 {
     const char *shown = model->device_name[0] ? model->device_name : "--";
@@ -208,7 +210,7 @@ static void fill_sheet(const codex_model_t *model, char *out, size_t out_size)
     }
     switch (model->info) {
     case CODEX_INFO_BUTTONS:
-        snprintf(out, out_size, "按键\n确定翻页\n长按打开设置\n上下切换\n上允许\n下拒绝");
+        snprintf(out, out_size, "按键\n确定翻页\n长按打开设置\n上下切换\n上键批准\n下键拒绝");
         break;
     case CODEX_INFO_DEVICE: {
         char bat[16];
@@ -226,9 +228,53 @@ static void fill_sheet(const codex_model_t *model, char *out, size_t out_size)
         break;
     case CODEX_INFO_ABOUT:
     default:
-        snprintf(out, out_size, "关于\n名称 %s\n版本 %s", shown, version);
+        snprintf(out, out_size, "关于\n名称 %s\n版本 %s\n来源 %s", shown, version, source_label(model));
         break;
     }
+}
+
+static bool token_is(const char *value, const char *lower)
+{
+    if (value == NULL) return false;
+    while (*lower != '\0') {
+        char letter = *value++;
+        if (letter >= 'A' && letter <= 'Z') letter = (char)(letter - 'A' + 'a');
+        if (letter != *lower++) return false;
+    }
+    return *value == '\0';
+}
+
+static const char *source_label(const codex_model_t *model)
+{
+    if (token_is(model->via, "herdr")) return "经 Herdr 的 Pi";
+    if (token_is(model->agent, "cursor")) return "Cursor";
+    if (token_is(model->agent, "codex")) return "Codex";
+    if (token_is(model->agent, "hermes")) return "Hermes";
+    return "本机 Pi";
+}
+
+static void show_lines(const char *text)
+{
+    char buf[384];
+    char *cursor;
+    int row = 0;
+    snprintf(buf, sizeof buf, "%s", text);
+    cursor = buf;
+    while (row < ROW_N && cursor[0] != '\0') {
+        char *split = strchr(cursor, '\n');
+        bool selected;
+        if (split != NULL) *split = '\0';
+        selected = cursor[0] == '>';
+        lv_label_set_text(s_ui.info_text[row], selected ? cursor + 1 : cursor);
+        label_font(s_ui.info_text[row], &codex_font_16, selected ? CYAN : INK);
+        lv_obj_set_style_bg_color(s_ui.info_rows[row], lv_color_hex(CYAN), 0);
+        lv_obj_set_style_bg_opa(s_ui.info_rows[row], selected ? LV_OPA_20 : LV_OPA_TRANSP, 0);
+        lv_obj_remove_flag(s_ui.info_rows[row], LV_OBJ_FLAG_HIDDEN);
+        row++;
+        if (split == NULL) break;
+        cursor = split + 1;
+    }
+    for (; row < ROW_N; row++) lv_obj_add_flag(s_ui.info_rows[row], LV_OBJ_FLAG_HIDDEN);
 }
 
 static void show_modal(bool visible)
@@ -247,78 +293,92 @@ void codex_ui_create(void)
     lv_obj_remove_flag(s_ui.screen, LV_OBJ_FLAG_SCROLLABLE);
 
     s_ui.status = make_label(s_ui.screen, &codex_font_16, "未连接");
-    lv_obj_set_pos(s_ui.status, 16, 14);
+    label_font(s_ui.status, &codex_font_16, CYAN);
+    lv_obj_set_pos(s_ui.status, 12, 8);
 
     s_ui.battery_shell = lv_obj_create(s_ui.screen);
     lv_obj_set_size(s_ui.battery_shell, 22, 12);
-    lv_obj_set_pos(s_ui.battery_shell, 168, 16);
+    lv_obj_set_pos(s_ui.battery_shell, 168, 10);
     lv_obj_set_style_radius(s_ui.battery_shell, 2, 0);
     lv_obj_set_style_bg_opa(s_ui.battery_shell, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_color(s_ui.battery_shell, lv_color_hex(INK), 0);
+    lv_obj_set_style_border_color(s_ui.battery_shell, lv_color_hex(CYAN), 0);
     lv_obj_set_style_border_width(s_ui.battery_shell, 1, 0);
     lv_obj_remove_flag(s_ui.battery_shell, LV_OBJ_FLAG_SCROLLABLE);
     s_ui.battery_fill = lv_obj_create(s_ui.battery_shell);
     lv_obj_set_size(s_ui.battery_fill, 8, 8);
     lv_obj_set_pos(s_ui.battery_fill, 1, 1);
     lv_obj_set_style_radius(s_ui.battery_fill, 1, 0);
-    lv_obj_set_style_bg_color(s_ui.battery_fill, lv_color_hex(GREEN), 0);
+    lv_obj_set_style_bg_color(s_ui.battery_fill, lv_color_hex(CYAN), 0);
     lv_obj_set_style_border_width(s_ui.battery_fill, 0, 0);
     s_ui.battery_text = make_label(s_ui.screen, &codex_font_16, "--");
-    lv_obj_set_pos(s_ui.battery_text, 194, 12);
+    label_font(s_ui.battery_text, &codex_font_16, CYAN);
+    lv_obj_set_pos(s_ui.battery_text, 194, 6);
 
-    s_ui.title = make_label(s_ui.screen, &codex_font_20, "Codex 伙伴");
-    lv_obj_set_pos(s_ui.title, 16, 38);
-    s_ui.state = make_label(s_ui.screen, &codex_font_20, "空闲");
-    lv_obj_set_pos(s_ui.state, 16, 66);
+    s_ui.title = make_label(s_ui.screen, &codex_font_20, "空闲");
+    label_font(s_ui.title, &codex_font_20, CYAN);
+    lv_obj_set_pos(s_ui.title, 12, 28);
+    s_ui.state = make_label(s_ui.screen, &codex_font_16, "");
+    lv_obj_add_flag(s_ui.state, LV_OBJ_FLAG_HIDDEN);
 
     codex_pet_create(&s_ui.pet, s_ui.screen);
-    lv_obj_set_pos(s_ui.pet.root, 50, 96);
+    lv_obj_set_pos(s_ui.pet.root, 12, 52);
 
     s_ui.usage = lv_obj_create(s_ui.screen);
-    lv_obj_set_size(s_ui.usage, 208, 108);
-    lv_obj_set_pos(s_ui.usage, 16, 208);
-    lv_obj_set_style_bg_color(s_ui.usage, lv_color_hex(CARD), 0);
+    lv_obj_set_size(s_ui.usage, 216, 96);
+    lv_obj_set_pos(s_ui.usage, 12, 206);
+    lv_obj_set_style_bg_opa(s_ui.usage, LV_OPA_TRANSP, 0);
     lv_obj_set_style_radius(s_ui.usage, 14, 0);
     lv_obj_set_style_border_width(s_ui.usage, 0, 0);
-    lv_obj_set_style_pad_all(s_ui.usage, 8, 0);
+    lv_obj_set_style_pad_all(s_ui.usage, 0, 0);
     lv_obj_remove_flag(s_ui.usage, LV_OBJ_FLAG_SCROLLABLE);
 
-    s_ui.primary_name = make_label(s_ui.usage, &codex_font_16, "5h");
+    s_ui.primary_name = make_label(s_ui.usage, &codex_font_16, "5小时");
     lv_obj_set_pos(s_ui.primary_name, 0, 0);
+    label_font(s_ui.primary_name, &codex_font_16, CYAN);
     s_ui.primary_bar = lv_bar_create(s_ui.usage);
     style_bar(s_ui.primary_bar);
-    lv_obj_set_pos(s_ui.primary_bar, 36, 4);
+    lv_obj_set_pos(s_ui.primary_bar, 0, 18);
     s_ui.primary_pct = make_label(s_ui.usage, &codex_font_16, "0%");
-    lv_obj_set_pos(s_ui.primary_pct, 168, 0);
-    s_ui.primary_reset = make_label(s_ui.usage, &codex_font_16, "--");
-    lv_obj_set_pos(s_ui.primary_reset, 36, 18);
+    label_font(s_ui.primary_pct, &codex_font_16, CYAN);
+    lv_obj_set_pos(s_ui.primary_pct, 170, 0);
+    s_ui.primary_reset = make_label(s_ui.usage, &codex_font_16, "还剩 --");
+    lv_obj_set_pos(s_ui.primary_reset, 0, 34);
 
-    s_ui.secondary_name = make_label(s_ui.usage, &codex_font_16, "7d");
-    lv_obj_set_pos(s_ui.secondary_name, 0, 46);
+    s_ui.secondary_name = make_label(s_ui.usage, &codex_font_16, "7天");
+    label_font(s_ui.secondary_name, &codex_font_16, CYAN);
+    lv_obj_set_pos(s_ui.secondary_name, 0, 50);
     s_ui.secondary_bar = lv_bar_create(s_ui.usage);
     style_bar(s_ui.secondary_bar);
-    lv_obj_set_pos(s_ui.secondary_bar, 36, 50);
+    lv_obj_set_pos(s_ui.secondary_bar, 0, 68);
     s_ui.secondary_pct = make_label(s_ui.usage, &codex_font_16, "0%");
-    lv_obj_set_pos(s_ui.secondary_pct, 168, 46);
-    s_ui.secondary_reset = make_label(s_ui.usage, &codex_font_16, "--");
-    lv_obj_set_pos(s_ui.secondary_reset, 36, 64);
+    label_font(s_ui.secondary_pct, &codex_font_16, CYAN);
+    lv_obj_set_pos(s_ui.secondary_pct, 170, 50);
+    s_ui.secondary_reset = make_label(s_ui.usage, &codex_font_16, "还剩 --");
+    lv_obj_set_pos(s_ui.secondary_reset, 0, 82);
 
     s_ui.footer = make_label(s_ui.screen, &codex_font_16, "上允许  下拒绝");
     label_font(s_ui.footer, &codex_font_16, MUTED);
     lv_obj_set_pos(s_ui.footer, 16, 292);
 
     s_ui.info = lv_obj_create(s_ui.screen);
-    lv_obj_set_size(s_ui.info, 208, 188);
-    lv_obj_set_pos(s_ui.info, 16, 96);
-    lv_obj_set_style_bg_color(s_ui.info, lv_color_hex(CARD), 0);
-    lv_obj_set_style_radius(s_ui.info, 14, 0);
+    lv_obj_set_size(s_ui.info, 216, 272);
+    lv_obj_set_pos(s_ui.info, 12, 28);
+    lv_obj_set_style_bg_opa(s_ui.info, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_ui.info, 0, 0);
+    lv_obj_set_style_pad_all(s_ui.info, 0, 0);
     lv_obj_remove_flag(s_ui.info, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(s_ui.info, LV_OBJ_FLAG_HIDDEN);
-    s_ui.info_text = make_label(s_ui.info, &codex_font_16, "令牌");
-    lv_obj_set_width(s_ui.info_text, 188);
-    lv_label_set_long_mode(s_ui.info_text, LV_LABEL_LONG_WRAP);
-    lv_obj_set_pos(s_ui.info_text, 8, 8);
+    for (int row = 0; row < ROW_N; row++) {
+        s_ui.info_rows[row] = lv_obj_create(s_ui.info);
+        lv_obj_set_size(s_ui.info_rows[row], 216, ROW_H - 2);
+        lv_obj_set_pos(s_ui.info_rows[row], 0, row * ROW_H);
+        lv_obj_set_style_radius(s_ui.info_rows[row], 6, 0);
+        lv_obj_set_style_border_width(s_ui.info_rows[row], 0, 0);
+        lv_obj_set_style_bg_opa(s_ui.info_rows[row], LV_OPA_TRANSP, 0);
+        lv_obj_remove_flag(s_ui.info_rows[row], LV_OBJ_FLAG_SCROLLABLE);
+        s_ui.info_text[row] = make_label(s_ui.info_rows[row], &codex_font_16, "");
+        lv_obj_align(s_ui.info_text[row], LV_ALIGN_LEFT_MID, 8, 0);
+    }
 
     s_ui.modal = lv_obj_create(s_ui.screen);
     lv_obj_set_size(s_ui.modal, 208, 132);
@@ -354,7 +414,12 @@ void codex_ui_apply(const codex_model_t *model, uint32_t now_ms)
     pose = codex_model_pose(model, now_ms);
     lv_label_set_text(s_ui.status, status_text(model));
     label_font(s_ui.status, &codex_font_16, model->stale ? ORANGE : INK);
-    lv_label_set_text(s_ui.title, page_title(model));
+    if (model->settings_open || model->page == CODEX_PAGE_INFO) {
+        lv_obj_add_flag(s_ui.title, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_remove_flag(s_ui.title, LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text(s_ui.title, pose_text(pose));
+    }
     lv_label_set_text(s_ui.state, pose_text(pose));
     codex_pet_set_pose(&s_ui.pet, pose);
 
@@ -369,11 +434,11 @@ void codex_ui_apply(const codex_model_t *model, uint32_t now_ms)
         lv_obj_set_width(s_ui.battery_fill, fill);
         lv_obj_remove_flag(s_ui.battery_fill, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_style_bg_color(s_ui.battery_fill,
-                                  lv_color_hex(model->battery_percent <= 15 ? RED : GREEN), 0);
+                                  lv_color_hex(model->battery_percent <= 15 ? RED : CYAN), 0);
     }
 
-    lv_label_set_text(s_ui.primary_name, model->primary_label[0] ? model->primary_label : "5h");
-    lv_label_set_text(s_ui.secondary_name, model->secondary_label[0] ? model->secondary_label : "7d");
+    lv_label_set_text(s_ui.primary_name, "5小时");
+    lv_label_set_text(s_ui.secondary_name, "7天");
     paint_meter(s_ui.primary_bar, s_ui.primary_pct, s_ui.primary_reset, model->primary,
                 model->primary_label, now_ms, model, false);
     paint_meter(s_ui.secondary_bar, s_ui.secondary_pct, s_ui.secondary_reset, model->secondary,
@@ -384,7 +449,7 @@ void codex_ui_apply(const codex_model_t *model, uint32_t now_ms)
         lv_obj_add_flag(s_ui.usage, LV_OBJ_FLAG_HIDDEN);
         lv_obj_remove_flag(s_ui.info, LV_OBJ_FLAG_HIDDEN);
         fill_sheet(model, info, sizeof info);
-        lv_label_set_text(s_ui.info_text, info);
+        show_lines(info);
     } else if (model->page == CODEX_PAGE_PET) {
         lv_obj_remove_flag(s_ui.pet.root, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(s_ui.usage, LV_OBJ_FLAG_HIDDEN);
@@ -415,7 +480,7 @@ void codex_ui_apply(const codex_model_t *model, uint32_t now_ms)
         show_modal(false);
     }
 
-    if (model->prompt_active) lv_label_set_text(s_ui.footer, "上允许  下拒绝");
+    if (model->prompt_active) lv_label_set_text(s_ui.footer, "上键批准  下键拒绝");
     else if (model->settings_open && model->confirm != CODEX_CONFIRM_NONE) {
         lv_label_set_text(s_ui.footer, "确定确认  下键取消");
     } else if (model->settings_open) lv_label_set_text(s_ui.footer, "上下选择  确定执行");

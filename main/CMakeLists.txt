@@ -13,4 +13,5 @@ idf_component_register(
 target_sources(${COMPONENT_LIB} PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/../assets/fonts/codex_font_16.c"
     "${CMAKE_CURRENT_LIST_DIR}/../assets/fonts/codex_font_20.c"
+    "${CMAKE_CURRENT_LIST_DIR}/../assets/images/pi_pet.c"
 )

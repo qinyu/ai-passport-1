@@ -392,6 +392,14 @@ static int apply_key(scan_t *sc, const char *key, codex_packet_t *out)
         out->has_secondary_label = true;
         return store_key_string(sc, out->secondary_label, sizeof out->secondary_label);
     }
+    if (strcmp(key, "agent") == 0) {
+        out->has_agent = true;
+        return store_key_string(sc, out->agent, sizeof out->agent);
+    }
+    if (strcmp(key, "via") == 0) {
+        out->has_via = true;
+        return store_key_string(sc, out->via, sizeof out->via);
+    }
     if (strcmp(key, "prompt") == 0) return parse_prompt(sc, out);
     if (strcmp(key, "time") == 0) return parse_time(sc, out);
     if (strcmp(key, "cmd") == 0) {

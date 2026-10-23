@@ -35,6 +35,10 @@ typedef struct {
     char primary_label[CODEX_LABEL_MAX];
     bool has_secondary_label;
     char secondary_label[CODEX_LABEL_MAX];
+    bool has_agent;
+    char agent[CODEX_STATE_MAX];
+    bool has_via;
+    char via[CODEX_STATE_MAX];
     bool has_prompt;
     bool prompt_clear;
     char prompt_id[CODEX_PROMPT_ID_MAX];

@@ -37,6 +37,9 @@ int main(void)
     expect(strcmp(packet.secondary_label, "7d") == 0, "7d label");
     expect(packet.now_epoch == 1775700000u, "now");
     expect(!packet.has_prompt, "usage does not clear prompt");
+    packet = parse("{\"agent\":\"PI\",\"via\":\"herdr\"}");
+    expect(packet.has_agent && strcmp(packet.agent, "PI") == 0, "agent");
+    expect(packet.has_via && strcmp(packet.via, "herdr") == 0, "via");
 
     packet = parse("{\"primary\":-4,\"secondary\":140}");
     expect(packet.primary == 0 && packet.secondary == 100, "clamp percent");

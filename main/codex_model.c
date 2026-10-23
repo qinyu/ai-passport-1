@@ -20,6 +20,8 @@ void codex_model_init(codex_model_t *model)
     memcpy(model->secondary_label, "7d", 3);
     model->brightness = 2;
     model->ble_enabled = true;
+    memcpy(model->agent, "pi", 3);
+    memcpy(model->via, "pi", 3);
     model->battery_percent = -1;
     model->battery_mv = -1;
 }
@@ -128,6 +130,12 @@ void codex_model_apply_packet(codex_model_t *model, const codex_packet_t *packet
     }
     if (packet->has_secondary_label && packet->secondary_label[0] != '\0') {
         copy_field(model->secondary_label, sizeof model->secondary_label, packet->secondary_label);
+    }
+    if (packet->has_agent && packet->agent[0] != '\0') {
+        copy_field(model->agent, sizeof model->agent, packet->agent);
+    }
+    if (packet->has_via && packet->via[0] != '\0') {
+        copy_field(model->via, sizeof model->via, packet->via);
     }
     if (packet->has_prompt) {
         if (packet->prompt_clear || packet->prompt_id[0] == '\0') clear_prompt(model);

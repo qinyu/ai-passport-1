@@ -74,9 +74,13 @@ class UsageSnapshot:
     task_complete_at: float | None = None
     attention_at: float | None = None
     last_activity_at: float | None = None
+    origin: str = "pi"
 
-    def packet(self, state: str, now: int | None = None) -> dict[str, Any]:
+    def packet(self, state: str, now: int | None = None, via: str = "pi") -> dict[str, Any]:
         moment = int(now if now is not None else datetime.now(timezone.utc).timestamp())
+        origin = via if via in {"pi", "herdr"} else self.origin
+        if origin not in {"pi", "herdr"}:
+            origin = "pi"
         return {
             "state": state if state in STATES else "idle",
             "tokens": int(self.tokens),
@@ -89,7 +93,8 @@ class UsageSnapshot:
             "primary_label": "5h",
             "secondary_label": "7d",
             "now": moment,
-            "agent": "CODEX",
+            "agent": "PI",
+            "via": origin,
         }
 
 
@@ -230,6 +235,14 @@ def choose_state(
     if state == "idle" and last_activity is not None and now - last_activity >= sleep_window:
         return "sleep"
     return state
+
+
+def session_origin(hint: str | None) -> str:
+    """Tell a local Pi session from one relayed through Herdr."""
+    text = (hint or "").lower()
+    if "herdr" in text or "mobile-relay" in text or "mobile_relay" in text:
+        return "herdr"
+    return "pi"
 
 
 def short_text(value: Any, fallback: str, limit: int) -> str:

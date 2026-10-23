@@ -4,21 +4,13 @@
 
 #include "lvgl.h"
 
-/* Procedural companion. GIF pets from the Stick build are not used: this board
- * has no PSRAM and the Passport UI is drawn with LVGL shapes. */
+/* Pi sprite frames taken from the Stick character pack and recolored only by
+ * transparency. The same silhouette is the Passport buddy for local Pi and
+ * for Pi reached through Herdr. */
 
 typedef struct {
     lv_obj_t *root;
-    lv_obj_t *shadow;
-    lv_obj_t *body;
-    lv_obj_t *ear_l;
-    lv_obj_t *ear_r;
-    lv_obj_t *eye_l;
-    lv_obj_t *eye_r;
-    lv_obj_t *pupil_l;
-    lv_obj_t *pupil_r;
-    lv_obj_t *mouth;
-    lv_obj_t *badge;
+    lv_obj_t *image;
     lv_timer_t *timer;
     codex_pose_t pose;
     uint32_t phase;

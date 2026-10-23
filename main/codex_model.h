@@ -136,6 +136,8 @@ typedef struct {
     char device_name[16];
     char mac[18];
     char fw_version[32];
+    char agent[CODEX_STATE_MAX];
+    char via[CODEX_STATE_MAX];
     int battery_percent;
     int battery_mv;
 } codex_model_t;
