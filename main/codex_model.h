@@ -41,7 +41,20 @@ typedef enum {
     CODEX_KEY_DOWN,
     CODEX_KEY_OK,
     CODEX_KEY_OK_LONG,
+    CODEX_KEY_OK_DOUBLE,
 } codex_key_t;
+
+typedef enum {
+    CODEX_SOUND_NONE = 0,
+    CODEX_SOUND_TICK,
+    CODEX_SOUND_GLIDE,
+    CODEX_SOUND_POSE,
+    CODEX_SOUND_DECIDE,
+    CODEX_SOUND_ERROR,
+    CODEX_SOUND_SUCCESS,
+    CODEX_SOUND_DENY,
+    CODEX_SOUND_LOWBAT,
+} codex_sound_t;
 
 typedef enum {
     CODEX_ACTION_NONE = 0,
@@ -94,6 +107,7 @@ typedef struct {
     char ack_cmd[CODEX_CMD_MAX];
     bool ack_ok;
     bool ble_enable;
+    codex_sound_t sound;
 } codex_action_t;
 
 typedef struct {
@@ -133,6 +147,8 @@ typedef struct {
     codex_confirm_t confirm;
     uint8_t brightness;
     bool ble_enabled;
+    bool sound_enabled;
+    bool prompt_choose_allow;
     char device_name[16];
     char mac[18];
     char fw_version[32];
@@ -148,7 +164,8 @@ void codex_model_note_input(codex_model_t *model, uint32_t now_ms);
 void codex_model_set_link(codex_model_t *model, bool up, bool encrypted);
 void codex_model_set_passkey(codex_model_t *model, bool visible, uint32_t passkey);
 void codex_model_set_battery(codex_model_t *model, int percent, int mv);
-void codex_model_set_prefs(codex_model_t *model, uint8_t brightness, bool ble_enabled);
+void codex_model_set_prefs(codex_model_t *model, uint8_t brightness, bool ble_enabled,
+                           bool sound_enabled);
 void codex_model_set_identity(codex_model_t *model, const char *name, const char *mac,
                               const char *version);
 uint8_t codex_brightness_percent(uint8_t level);

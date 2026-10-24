@@ -50,7 +50,7 @@ void codex_pet_create(codex_pet_t *pet, lv_obj_t *parent)
     pet->pose = CODEX_POSE_IDLE;
     pet->phase = 0;
     pet->root = lv_obj_create(parent);
-    lv_obj_set_size(pet->root, 216, 150);
+    lv_obj_set_size(pet->root, 176, 150);
     lv_obj_set_style_bg_opa(pet->root, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(pet->root, 0, 0);
     lv_obj_set_style_pad_all(pet->root, 0, 0);

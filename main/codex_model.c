@@ -20,17 +20,21 @@ void codex_model_init(codex_model_t *model)
     memcpy(model->secondary_label, "7d", 3);
     model->brightness = 2;
     model->ble_enabled = true;
+    model->sound_enabled = true;
+    model->prompt_choose_allow = true;
     memcpy(model->agent, "pi", 3);
     memcpy(model->via, "pi", 3);
     model->battery_percent = -1;
     model->battery_mv = -1;
 }
 
-void codex_model_set_prefs(codex_model_t *model, uint8_t brightness, bool ble_enabled)
+void codex_model_set_prefs(codex_model_t *model, uint8_t brightness, bool ble_enabled,
+                           bool sound_enabled)
 {
     if (model == NULL) return;
     model->brightness = brightness < 4 ? brightness : 3;
     model->ble_enabled = ble_enabled;
+    model->sound_enabled = sound_enabled;
 }
 
 void codex_model_set_identity(codex_model_t *model, const char *name, const char *mac,
@@ -51,8 +55,8 @@ uint8_t codex_brightness_percent(uint8_t level)
 
 bool codex_setting_available(codex_setting_t item)
 {
-    return item == CODEX_SET_BRIGHT || item == CODEX_SET_BLE || item == CODEX_SET_UNPAIR ||
-           item == CODEX_SET_RESET;
+    return item == CODEX_SET_BRIGHT || item == CODEX_SET_SOUND || item == CODEX_SET_BLE ||
+           item == CODEX_SET_UNPAIR || item == CODEX_SET_RESET;
 }
 
 void codex_model_note_input(codex_model_t *model, uint32_t now_ms)
@@ -141,6 +145,7 @@ void codex_model_apply_packet(codex_model_t *model, const codex_packet_t *packet
         if (packet->prompt_clear || packet->prompt_id[0] == '\0') clear_prompt(model);
         else {
             model->prompt_active = true;
+            model->prompt_choose_allow = true;
             copy_field(model->prompt_id, sizeof model->prompt_id, packet->prompt_id);
             copy_field(model->prompt_tool, sizeof model->prompt_tool, packet->prompt_tool);
             copy_field(model->prompt_hint, sizeof model->prompt_hint, packet->prompt_hint);
@@ -184,16 +189,38 @@ static void decide(codex_model_t *model, const char *decision, uint32_t now_ms, 
         model->approvals++;
         model->heart_until_valid = true;
         model->heart_until_ms = now_ms + CODEX_HEART_MS;
+        if (action != NULL) action->sound = CODEX_SOUND_SUCCESS;
     } else {
         model->denials++;
+        if (action != NULL) action->sound = CODEX_SOUND_DENY;
     }
     clear_prompt(model);
 }
 
-static void close_settings(codex_model_t *model)
+static void note_sound(codex_action_t *action, codex_sound_t sound)
 {
-    model->settings_open = false;
-    model->confirm = CODEX_CONFIRM_NONE;
+    if (action != NULL && action->sound == CODEX_SOUND_NONE) action->sound = sound;
+}
+
+static void cycle_pose(codex_model_t *model, int delta)
+{
+    static const char *poses[] = {
+        "idle", "busy", "attention", "completed", "dizzy", "heart", "sleep",
+    };
+    int index = 0;
+    int count = (int)(sizeof poses / sizeof poses[0]);
+    int i;
+    for (i = 0; i < count; i++) {
+        if (strcmp(model->state, poses[i]) == 0) {
+            index = i;
+            break;
+        }
+    }
+    index += delta;
+    if (index < 0) index = count - 1;
+    if (index >= count) index = 0;
+    copy_field(model->state, sizeof model->state, poses[index]);
+    model->heart_until_valid = false;
 }
 
 static void move_setting(codex_model_t *model, int delta)
@@ -205,49 +232,55 @@ static void move_setting(codex_model_t *model, int delta)
     model->confirm = CODEX_CONFIRM_NONE;
 }
 
+static void go_usage(codex_model_t *model)
+{
+    model->settings_open = false;
+    model->confirm = CODEX_CONFIRM_NONE;
+    model->page = CODEX_PAGE_DASH;
+}
+
 static void activate_setting(codex_model_t *model, uint32_t now_ms, codex_action_t *action)
 {
     (void)now_ms;
+    model->confirm = CODEX_CONFIRM_NONE;
     if (!codex_setting_available(model->setting)) {
-        model->confirm = CODEX_CONFIRM_NONE;
+        note_sound(action, CODEX_SOUND_TICK);
         return;
     }
     if (model->setting == CODEX_SET_BRIGHT) {
-        model->confirm = CODEX_CONFIRM_NONE;
         model->brightness = (uint8_t)((model->brightness + 1u) % 4u);
+        note_sound(action, CODEX_SOUND_TICK);
+        return;
+    }
+    if (model->setting == CODEX_SET_SOUND) {
+        model->sound_enabled = !model->sound_enabled;
+        note_sound(action, CODEX_SOUND_TICK);
         return;
     }
     if (model->setting == CODEX_SET_BLE) {
-        model->confirm = CODEX_CONFIRM_NONE;
         model->ble_enabled = !model->ble_enabled;
         if (action != NULL) {
             action->kind = CODEX_ACTION_BLE_SET;
             action->ble_enable = model->ble_enabled;
         }
+        note_sound(action, CODEX_SOUND_TICK);
         return;
     }
     if (model->setting == CODEX_SET_UNPAIR) {
-        if (model->confirm != CODEX_CONFIRM_UNPAIR) {
-            model->confirm = CODEX_CONFIRM_UNPAIR;
-            return;
-        }
-        model->confirm = CODEX_CONFIRM_NONE;
-        model->settings_open = false;
+        go_usage(model);
         if (action != NULL) action->kind = CODEX_ACTION_UNPAIR;
+        note_sound(action, CODEX_SOUND_SUCCESS);
         return;
     }
-    if (model->confirm != CODEX_CONFIRM_RESET) {
-        model->confirm = CODEX_CONFIRM_RESET;
-        return;
-    }
-    model->confirm = CODEX_CONFIRM_NONE;
-    model->settings_open = false;
+    go_usage(model);
     model->brightness = 2;
     model->ble_enabled = true;
+    model->sound_enabled = true;
     if (action != NULL) {
         action->kind = CODEX_ACTION_RESET_PREFS;
         action->ble_enable = true;
     }
+    note_sound(action, CODEX_SOUND_SUCCESS);
 }
 
 void codex_model_on_key(codex_model_t *model, codex_key_t key, uint32_t now_ms, codex_action_t *action)
@@ -261,39 +294,62 @@ void codex_model_on_key(codex_model_t *model, codex_key_t key, uint32_t now_ms, 
     model->forced_dim = false;
     if (was_dim) return;
 
+    if (key == CODEX_KEY_OK_DOUBLE) {
+        go_usage(model);
+        note_sound(action, CODEX_SOUND_GLIDE);
+        return;
+    }
+    if (model->passkey_visible) {
+        if (key == CODEX_KEY_OK || key == CODEX_KEY_DOWN) {
+            model->passkey_visible = false;
+            note_sound(action, CODEX_SOUND_DENY);
+        } else {
+            note_sound(action, CODEX_SOUND_TICK);
+        }
+        return;
+    }
     if (model->prompt_active && key == CODEX_KEY_UP) {
+        model->prompt_choose_allow = true;
         decide(model, "accept", now_ms, action);
         return;
     }
     if (model->prompt_active && key == CODEX_KEY_DOWN) {
+        model->prompt_choose_allow = false;
         decide(model, "cancel", now_ms, action);
         return;
     }
-    if (model->prompt_active || model->passkey_visible) return;
+    if (model->prompt_active && key == CODEX_KEY_OK) {
+        decide(model, model->prompt_choose_allow ? "accept" : "cancel", now_ms, action);
+        return;
+    }
+    if (model->prompt_active) {
+        note_sound(action, CODEX_SOUND_TICK);
+        return;
+    }
 
     if (key == CODEX_KEY_OK_LONG) {
-        if (model->settings_open) close_settings(model);
+        if (model->settings_open) go_usage(model);
         else model->settings_open = true;
+        note_sound(action, CODEX_SOUND_GLIDE);
         return;
     }
     if (model->settings_open) {
         if (key == CODEX_KEY_UP) {
             move_setting(model, -1);
+            note_sound(action, CODEX_SOUND_TICK);
             return;
         }
         if (key == CODEX_KEY_DOWN) {
-            if (model->confirm != CODEX_CONFIRM_NONE) {
-                model->confirm = CODEX_CONFIRM_NONE;
-                return;
-            }
             move_setting(model, 1);
+            note_sound(action, CODEX_SOUND_TICK);
             return;
         }
         if (key == CODEX_KEY_OK) activate_setting(model, now_ms, action);
         return;
     }
     if (key == CODEX_KEY_OK) {
-        model->page = (codex_page_t)(((int)model->page + 1) % CODEX_PAGE_COUNT);
+        model->page = model->page == CODEX_PAGE_INFO ? CODEX_PAGE_DASH : CODEX_PAGE_INFO;
+        note_sound(action, CODEX_SOUND_GLIDE);
         return;
     }
     if (model->page == CODEX_PAGE_INFO && (key == CODEX_KEY_UP || key == CODEX_KEY_DOWN)) {
@@ -302,7 +358,15 @@ void codex_model_on_key(codex_model_t *model, codex_key_t key, uint32_t now_ms, 
         if (next < 0) next = CODEX_INFO_COUNT - 1;
         if (next >= CODEX_INFO_COUNT) next = 0;
         model->info = (codex_info_t)next;
+        note_sound(action, CODEX_SOUND_TICK);
+        return;
     }
+    if (model->page == CODEX_PAGE_DASH && (key == CODEX_KEY_UP || key == CODEX_KEY_DOWN)) {
+        cycle_pose(model, key == CODEX_KEY_DOWN ? 1 : -1);
+        note_sound(action, CODEX_SOUND_POSE);
+        return;
+    }
+    note_sound(action, CODEX_SOUND_TICK);
 }
 
 codex_pose_t codex_pose_from_state(const char *state)

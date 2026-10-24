@@ -4,6 +4,8 @@ idf_component_register(
          "codex_model.c"
          "codex_ble.c"
          "codex_prefs.c"
+         "codex_gesture.c"
+         "codex_tone.c"
          "codex_pet.c"
          "codex_ui.c"
     INCLUDE_DIRS "."

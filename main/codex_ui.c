@@ -1,5 +1,4 @@
-/* Page geometry below is a provisional stack so the layout can be restyled
- * after a direction is chosen. Do not treat coordinates or the 16/20 sizes as final. */
+/* 240x320 vertical stack. Key hints stay in the right gutter, beside Up, Down, and OK. */
 #include "codex_ui.h"
 
 #include "codex_font.h"
@@ -38,6 +37,9 @@ typedef struct {
     lv_obj_t *secondary_pct;
     lv_obj_t *secondary_reset;
     lv_obj_t *footer;
+    lv_obj_t *hint_up;
+    lv_obj_t *hint_down;
+    lv_obj_t *hint_ok;
     lv_obj_t *info;
     lv_obj_t *info_rows[ROW_N];
     lv_obj_t *info_text[ROW_N];
@@ -97,7 +99,7 @@ static const char *status_text(const codex_model_t *model)
 
 static void style_bar(lv_obj_t *bar)
 {
-    lv_obj_set_size(bar, 216, 14);
+    lv_obj_set_size(bar, 176, 14);
     lv_bar_set_range(bar, 0, 100);
     lv_obj_set_style_bg_color(bar, lv_color_hex(TRACK), LV_PART_MAIN);
     lv_obj_set_style_radius(bar, 4, LV_PART_MAIN);
@@ -131,14 +133,6 @@ static void paint_meter(lv_obj_t *bar, lv_obj_t *pct, lv_obj_t *reset, uint8_t p
     label_font(reset, &codex_font_16, reset_color(urgency));
 }
 
-static const char *page_title(const codex_model_t *model)
-{
-    if (model->settings_open) return "设置";
-    if (model->page == CODEX_PAGE_PET) return "姿态";
-    if (model->page == CODEX_PAGE_INFO) return "信息";
-    return "用量";
-}
-
 static const char *bright_name(uint8_t level)
 {
     static const char *names[] = {"低", "中", "高", "最亮"};
@@ -160,6 +154,7 @@ static void append_setting(char *out, size_t out_size, const codex_model_t *mode
         break;
     case CODEX_SET_SOUND:
         name = "声音";
+        value = model->sound_enabled ? "开" : "关";
         break;
     case CODEX_SET_BLE:
         name = "蓝牙";
@@ -176,16 +171,17 @@ static void append_setting(char *out, size_t out_size, const codex_model_t *mode
         break;
     case CODEX_SET_UNPAIR:
         name = "解除配对";
-        value = model->confirm == CODEX_CONFIRM_UNPAIR ? "再按确定" : "";
+        value = "";
         break;
     case CODEX_SET_RESET:
         name = "恢复设置";
-        value = model->confirm == CODEX_CONFIRM_RESET ? "再按确定" : "";
+        value = "";
         break;
     default:
         break;
     }
-    snprintf(line, sizeof line, "%s%s %s\n", mark, name, value);
+    if (value[0] == '\0') snprintf(line, sizeof line, "%s%s\n", mark, name);
+    else snprintf(line, sizeof line, "%s%s %s\n", mark, name, value);
     if (used + 1 < out_size) snprintf(out + used, out_size - used, "%s", line);
 }
 
@@ -210,7 +206,8 @@ static void fill_sheet(const codex_model_t *model, char *out, size_t out_size)
     }
     switch (model->info) {
     case CODEX_INFO_BUTTONS:
-        snprintf(out, out_size, "按键\n确定翻页\n长按打开设置\n上下切换\n上键批准\n下键拒绝");
+        snprintf(out, out_size,
+                 "短按确定翻页\n上下切换姿态\n长按进入设置\n再长按退出\n双击回用量\n上键批准\n下键拒绝\n配对码可关");
         break;
     case CODEX_INFO_DEVICE: {
         char bat[16];
@@ -321,11 +318,11 @@ void codex_ui_create(void)
     lv_obj_add_flag(s_ui.state, LV_OBJ_FLAG_HIDDEN);
 
     codex_pet_create(&s_ui.pet, s_ui.screen);
-    lv_obj_set_pos(s_ui.pet.root, 12, 52);
+    lv_obj_set_pos(s_ui.pet.root, 8, 52);
 
     s_ui.usage = lv_obj_create(s_ui.screen);
-    lv_obj_set_size(s_ui.usage, 216, 96);
-    lv_obj_set_pos(s_ui.usage, 12, 206);
+    lv_obj_set_size(s_ui.usage, 176, 96);
+    lv_obj_set_pos(s_ui.usage, 8, 206);
     lv_obj_set_style_bg_opa(s_ui.usage, LV_OPA_TRANSP, 0);
     lv_obj_set_style_radius(s_ui.usage, 14, 0);
     lv_obj_set_style_border_width(s_ui.usage, 0, 0);
@@ -340,7 +337,7 @@ void codex_ui_create(void)
     lv_obj_set_pos(s_ui.primary_bar, 0, 18);
     s_ui.primary_pct = make_label(s_ui.usage, &codex_font_16, "0%");
     label_font(s_ui.primary_pct, &codex_font_16, CYAN);
-    lv_obj_set_pos(s_ui.primary_pct, 170, 0);
+    lv_obj_set_pos(s_ui.primary_pct, 132, 0);
     s_ui.primary_reset = make_label(s_ui.usage, &codex_font_16, "还剩 --");
     lv_obj_set_pos(s_ui.primary_reset, 0, 34);
 
@@ -352,17 +349,34 @@ void codex_ui_create(void)
     lv_obj_set_pos(s_ui.secondary_bar, 0, 68);
     s_ui.secondary_pct = make_label(s_ui.usage, &codex_font_16, "0%");
     label_font(s_ui.secondary_pct, &codex_font_16, CYAN);
-    lv_obj_set_pos(s_ui.secondary_pct, 170, 50);
+    lv_obj_set_pos(s_ui.secondary_pct, 132, 50);
     s_ui.secondary_reset = make_label(s_ui.usage, &codex_font_16, "还剩 --");
     lv_obj_set_pos(s_ui.secondary_reset, 0, 82);
 
-    s_ui.footer = make_label(s_ui.screen, &codex_font_16, "上允许  下拒绝");
-    label_font(s_ui.footer, &codex_font_16, MUTED);
-    lv_obj_set_pos(s_ui.footer, 16, 292);
+    s_ui.footer = make_label(s_ui.screen, &codex_font_16, "");
+    lv_obj_add_flag(s_ui.footer, LV_OBJ_FLAG_HIDDEN);
+    s_ui.hint_up = make_label(s_ui.screen, &codex_font_16, "姿态");
+    s_ui.hint_down = make_label(s_ui.screen, &codex_font_16, "姿态");
+    s_ui.hint_ok = make_label(s_ui.screen, &codex_font_16, "翻页");
+    label_font(s_ui.hint_up, &codex_font_16, CYAN);
+    label_font(s_ui.hint_down, &codex_font_16, CYAN);
+    label_font(s_ui.hint_ok, &codex_font_16, CYAN);
+    lv_obj_set_width(s_ui.hint_up, 50);
+    lv_obj_set_width(s_ui.hint_down, 50);
+    lv_obj_set_width(s_ui.hint_ok, 50);
+    lv_obj_set_style_text_align(s_ui.hint_up, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_style_text_align(s_ui.hint_down, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_style_text_align(s_ui.hint_ok, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_label_set_long_mode(s_ui.hint_up, LV_LABEL_LONG_CLIP);
+    lv_label_set_long_mode(s_ui.hint_down, LV_LABEL_LONG_CLIP);
+    lv_label_set_long_mode(s_ui.hint_ok, LV_LABEL_LONG_CLIP);
+    lv_obj_set_pos(s_ui.hint_up, 188, 72);
+    lv_obj_set_pos(s_ui.hint_down, 188, 156);
+    lv_obj_set_pos(s_ui.hint_ok, 188, 248);
 
     s_ui.info = lv_obj_create(s_ui.screen);
-    lv_obj_set_size(s_ui.info, 216, 272);
-    lv_obj_set_pos(s_ui.info, 12, 28);
+    lv_obj_set_size(s_ui.info, 176, 272);
+    lv_obj_set_pos(s_ui.info, 8, 28);
     lv_obj_set_style_bg_opa(s_ui.info, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_ui.info, 0, 0);
     lv_obj_set_style_pad_all(s_ui.info, 0, 0);
@@ -370,7 +384,7 @@ void codex_ui_create(void)
     lv_obj_add_flag(s_ui.info, LV_OBJ_FLAG_HIDDEN);
     for (int row = 0; row < ROW_N; row++) {
         s_ui.info_rows[row] = lv_obj_create(s_ui.info);
-        lv_obj_set_size(s_ui.info_rows[row], 216, ROW_H - 2);
+        lv_obj_set_size(s_ui.info_rows[row], 176, ROW_H - 2);
         lv_obj_set_pos(s_ui.info_rows[row], 0, row * ROW_H);
         lv_obj_set_style_radius(s_ui.info_rows[row], 6, 0);
         lv_obj_set_style_border_width(s_ui.info_rows[row], 0, 0);
@@ -399,6 +413,9 @@ void codex_ui_create(void)
     lv_label_set_long_mode(s_ui.modal_hint, LV_LABEL_LONG_WRAP);
     lv_obj_set_pos(s_ui.modal_hint, 10, 64);
     label_font(s_ui.modal_hint, &codex_font_16, MUTED);
+    lv_obj_move_foreground(s_ui.hint_up);
+    lv_obj_move_foreground(s_ui.hint_down);
+    lv_obj_move_foreground(s_ui.hint_ok);
 
     lv_screen_load(s_ui.screen);
 }
@@ -480,13 +497,36 @@ void codex_ui_apply(const codex_model_t *model, uint32_t now_ms)
         show_modal(false);
     }
 
-    if (model->prompt_active) lv_label_set_text(s_ui.footer, "上键批准  下键拒绝");
-    else if (model->settings_open && model->confirm != CODEX_CONFIRM_NONE) {
-        lv_label_set_text(s_ui.footer, "确定确认  下键取消");
-    } else if (model->settings_open) lv_label_set_text(s_ui.footer, "上下选择  确定执行");
-    else if (model->page == CODEX_PAGE_INFO) lv_label_set_text(s_ui.footer, "上下切换  确定翻页");
-    else if (!model->packet_seen && model->link_up) lv_label_set_text(s_ui.footer, "暂无数据");
-    else lv_label_set_text(s_ui.footer, "确定翻页  长按设置");
+    if (model->passkey_visible) {
+        lv_label_set_text(s_ui.hint_up, "");
+        lv_label_set_text(s_ui.hint_down, "关闭");
+        lv_label_set_text(s_ui.hint_ok, "关闭");
+    } else if (model->prompt_active) {
+        lv_label_set_text(s_ui.hint_up, model->prompt_choose_allow ? ">允许" : "允许");
+        lv_label_set_text(s_ui.hint_down, model->prompt_choose_allow ? "拒绝" : ">拒绝");
+        lv_label_set_text(s_ui.hint_ok, "执行");
+    } else if (model->settings_open) {
+        lv_label_set_text(s_ui.hint_up, "上项");
+        lv_label_set_text(s_ui.hint_down, "下项");
+        lv_label_set_text(s_ui.hint_ok, "执行");
+    } else if (model->page == CODEX_PAGE_INFO) {
+        lv_label_set_text(s_ui.hint_up, "上项");
+        lv_label_set_text(s_ui.hint_down, "下项");
+        lv_label_set_text(s_ui.hint_ok, "翻页");
+    } else {
+        lv_label_set_text(s_ui.hint_up, "姿态");
+        lv_label_set_text(s_ui.hint_down, "姿态");
+        lv_label_set_text(s_ui.hint_ok, "翻页");
+    }
+    label_font(s_ui.hint_up, &codex_font_16, CYAN);
+    label_font(s_ui.hint_down, &codex_font_16, CYAN);
+    label_font(s_ui.hint_ok, &codex_font_16, CYAN);
+    if (model->prompt_active && !model->passkey_visible) {
+        label_font(model->prompt_choose_allow ? s_ui.hint_down : s_ui.hint_up, &codex_font_16, MUTED);
+    }
+    lv_obj_move_foreground(s_ui.hint_up);
+    lv_obj_move_foreground(s_ui.hint_down);
+    lv_obj_move_foreground(s_ui.hint_ok);
 }
 
 void codex_ui_destroy(void)

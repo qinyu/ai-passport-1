@@ -43,6 +43,14 @@ run_static_checks() {
         tests/test_codex_model.c main/codex_model.c main/codex_protocol.c \
         -o "${test_dir}/test_codex_model"
     "${test_dir}/test_codex_model"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_codex_gesture.c main/codex_gesture.c \
+        -o "${test_dir}/test_codex_gesture"
+    "${test_dir}/test_codex_gesture"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_codex_tone.c main/codex_tone.c \
+        -o "${test_dir}/test_codex_tone"
+    "${test_dir}/test_codex_tone"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Icomponents/bsp/src \
         tests/test_bsp_display_rounding.c components/bsp/src/bsp_display_rounding.c \
         -o "${test_dir}/test_bsp_display_rounding"

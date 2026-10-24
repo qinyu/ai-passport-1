@@ -10,6 +10,7 @@
 typedef struct {
     uint8_t brightness;
     bool ble_enabled;
+    bool sound_enabled;
 } codex_prefs_t;
 
 esp_err_t codex_prefs_load(codex_prefs_t *out);

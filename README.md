@@ -14,22 +14,29 @@ The behavior is ported from [qinyu/codex-buddy](https://github.com/qinyu/codex-b
 
 Portrait dashboard on the navy screen:
 
-- Link state, work pose, and a drawn pet.
-- `5h` and `7d` bars. Fill color is blue through 34%, green through 69%, and orange after that.
-- Reset countdown under each bar. `5h` turns orange at 3 hours and red at 1 hour. `7d` turns orange at 4 days and red at 2 days.
-- Battery percent in the top-right. An unavailable gauge shows `--`.
+- Link state, work pose, and the Pi pet. Up and Down on the usage page change that pose.
+- `5h` and `7d` bars with a countdown under each bar. `5h` turns orange at 3 hours and red at 1 hour. `7d` turns orange at 4 days and red at 2 days.
+- Battery percent in the top bar. An unavailable gauge shows `--`.
 - Approval card with the tool name and hint. Passkey card during pairing.
+- Key hints in the right gutter, top to bottom, beside the physical Up, Down, and OK keys.
 
 ## Keys
 
+The power key is only power and sleep. A short press is under 400 ms. A long press is at least 800 ms and is recognized when the key is released. A double is two OK shorts whose second press starts within 400 ms of the first release.
+
 | Key | Action |
 | --- | --- |
-| Up | Previous info or settings row. Allows a pending prompt. |
-| Down | Next row, or cancels a confirmation. Refuses a pending prompt. |
-| OK | Next main page: dashboard, pet, info. Inside settings, changes the selected item. |
-| OK long-press | Open or close settings |
+| Up short | Previous pose on the usage page. Previous row on info or settings. Allows a pending prompt. |
+| Down short | Next pose, or the next row. Refuses a pending prompt. Closes the passkey card. Moves off Unpair and Reset without running them. |
+| OK short | Toggle usage and info. In settings, step, toggle, or run the selected row. On an approval card, run the highlighted choice. Closes the passkey card. |
+| OK long | Enter settings, or leave settings and return to usage. |
+| OK double | Return to the usage page immediately, including from settings. |
 
-Info covers the name, buttons, battery, address, link security, the six-digit pairing code, and attribution. Settings stores brightness and the BLE switch. Sound, Wi-Fi, the LED, and clock rotation read as not available. The screen arrangement is provisional. The first press after the backlight has dimmed only wakes it. A permission prompt or pairing code keeps the backlight up. With no prompt and no key for 45 seconds, the backlight dims.
+Info covers the name, the key table, battery, address, link security, the six-digit pairing code, and attribution. It also says whether the session is local Pi or Pi through Herdr. Settings stores brightness, the sound switch, and the BLE switch in NVS. Wi-Fi, the LED, and clock rotation read as not available. Short OK on Unpair or Reset runs that action and returns to usage. The first press after the backlight has dimmed only wakes it. A permission prompt or pairing code keeps the backlight up. With no prompt and no key for 45 seconds, the backlight dims.
+
+## Sound
+
+The ES8311 plays a cue when the settings sound switch is on. A normal short press is a light tick. Turning a page or entering and leaving settings is a two-note glide. A pose change is a short rising glide. A pending approval repeats a two-note call until it is handled. Failure is a low pair. Pairing success and allow are a short rise. Deny and cancel are one falling tone. Low battery is a slow triple, played once until the gauge is above 20% again.
 
 ## Host path
 

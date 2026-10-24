@@ -97,38 +97,69 @@ int main(void)
     codex_model_on_key(&model, CODEX_KEY_DOWN, 8100, &action);
     expect(strcmp(action.decision, "cancel") == 0 && model.denials == 1, "deny");
 
+    packet = must_parse("{\"prompt\":{\"id\":\"h11\",\"tool\":\"Read\",\"hint\":\"x\"}}");
+    codex_model_apply_packet(&model, &packet, 8200, &action);
+    expect(model.prompt_choose_allow, "prompt defaults to allow");
+    codex_model_on_key(&model, CODEX_KEY_OK, 8210, &action);
+    expect(strcmp(action.decision, "accept") == 0 && action.sound == CODEX_SOUND_SUCCESS, "ok runs the highlight");
+
     packet = must_parse("{\"state\":\"idle\"}");
     codex_model_apply_packet(&model, &packet, 9000, &action);
     expect(!model.prompt_active, "usage packet keeps prompt cleared");
+    expect(strcmp(model.state, "idle") == 0, "idle stored");
+
+    codex_model_set_passkey(&model, true, 123456);
+    codex_model_on_key(&model, CODEX_KEY_UP, 9010, &action);
+    expect(model.passkey_visible && action.sound == CODEX_SOUND_TICK, "up leaves the passkey");
+    codex_model_on_key(&model, CODEX_KEY_DOWN, 9020, &action);
+    expect(!model.passkey_visible && action.sound == CODEX_SOUND_DENY, "down closes the passkey");
+    codex_model_set_passkey(&model, true, 123456);
+    codex_model_on_key(&model, CODEX_KEY_OK, 9030, &action);
+    expect(!model.passkey_visible && model.page == CODEX_PAGE_DASH, "ok closes the passkey");
 
     expect(model.page == CODEX_PAGE_DASH && !model.settings_open, "start on dashboard");
+    codex_model_on_key(&model, CODEX_KEY_DOWN, 9040, &action);
+    expect(strcmp(model.state, "busy") == 0 && action.sound == CODEX_SOUND_POSE, "down changes pose");
+    codex_model_on_key(&model, CODEX_KEY_UP, 9050, &action);
+    expect(strcmp(model.state, "idle") == 0 && action.sound == CODEX_SOUND_POSE, "up changes pose");
     codex_model_on_key(&model, CODEX_KEY_OK, 9100, &action);
-    expect(model.page == CODEX_PAGE_PET, "ok opens the pet page");
-    codex_model_on_key(&model, CODEX_KEY_OK, 9110, &action);
-    expect(model.page == CODEX_PAGE_INFO, "ok opens info");
+    expect(model.page == CODEX_PAGE_INFO && action.sound == CODEX_SOUND_GLIDE, "ok opens info");
     codex_model_on_key(&model, CODEX_KEY_DOWN, 9120, &action);
-    expect(model.info == CODEX_INFO_BUTTONS, "down moves info");
-    codex_model_on_key(&model, CODEX_KEY_OK, 9130, &action);
-    expect(model.page == CODEX_PAGE_DASH, "ok returns to the dashboard");
+    expect(model.info == CODEX_INFO_BUTTONS && action.sound == CODEX_SOUND_TICK, "down moves info");
+    codex_model_on_key(&model, CODEX_KEY_OK_DOUBLE, 9130, &action);
+    expect(model.page == CODEX_PAGE_DASH && !model.settings_open && action.sound == CODEX_SOUND_GLIDE,
+           "double ok returns to usage");
     codex_model_on_key(&model, CODEX_KEY_OK_LONG, 9200, &action);
-    expect(model.settings_open && !codex_model_is_dim(&model, 9200), "long ok opens settings");
+    expect(model.settings_open && model.page == CODEX_PAGE_DASH && action.sound == CODEX_SOUND_GLIDE,
+           "long ok opens settings");
     codex_model_on_key(&model, CODEX_KEY_OK, 9210, &action);
-    expect(model.brightness == 3, "ok cycles brightness");
+    expect(model.brightness == 3 && action.sound == CODEX_SOUND_TICK, "ok cycles brightness");
     codex_model_on_key(&model, CODEX_KEY_DOWN, 9220, &action);
     codex_model_on_key(&model, CODEX_KEY_OK, 9230, &action);
-    expect(model.setting == CODEX_SET_SOUND && model.brightness == 3, "sound is not available");
-    for (int i = 0; i < 5; i++) codex_model_on_key(&model, CODEX_KEY_DOWN, 9300 + i, &action);
+    expect(model.setting == CODEX_SET_SOUND && !model.sound_enabled, "sound toggles off");
+    codex_model_on_key(&model, CODEX_KEY_DOWN, 9240, &action);
+    codex_model_on_key(&model, CODEX_KEY_OK, 9250, &action);
+    expect(model.setting == CODEX_SET_BLE && !model.ble_enabled && action.kind == CODEX_ACTION_BLE_SET, "ble toggles");
+    for (int i = 0; i < 4; i++) codex_model_on_key(&model, CODEX_KEY_DOWN, 9300 + i, &action);
     expect(model.setting == CODEX_SET_UNPAIR, "reach unpair");
-    codex_model_on_key(&model, CODEX_KEY_OK, 9310, &action);
-    expect(action.kind == CODEX_ACTION_NONE && model.confirm == CODEX_CONFIRM_UNPAIR, "unpair asks again");
-    codex_model_on_key(&model, CODEX_KEY_DOWN, 9320, &action);
-    expect(model.confirm == CODEX_CONFIRM_NONE && model.setting == CODEX_SET_UNPAIR, "down cancels confirm");
-    codex_model_on_key(&model, CODEX_KEY_DOWN, 9325, &action);
-    expect(model.setting == CODEX_SET_RESET, "down reaches reset");
-    codex_model_on_key(&model, CODEX_KEY_OK, 9330, &action);
-    codex_model_on_key(&model, CODEX_KEY_OK, 9340, &action);
-    expect(action.kind == CODEX_ACTION_RESET_PREFS && model.brightness == 2 && model.ble_enabled, "reset prefs");
-    expect(!model.settings_open, "reset closes settings");
+    codex_model_on_key(&model, CODEX_KEY_DOWN, 9310, &action);
+    expect(action.kind == CODEX_ACTION_NONE && model.setting == CODEX_SET_RESET, "down leaves unpair");
+    codex_model_on_key(&model, CODEX_KEY_UP, 9315, &action);
+    expect(model.setting == CODEX_SET_UNPAIR, "up returns to unpair");
+    codex_model_on_key(&model, CODEX_KEY_OK, 9320, &action);
+    expect(action.kind == CODEX_ACTION_UNPAIR && action.sound == CODEX_SOUND_SUCCESS, "ok runs unpair");
+    expect(!model.settings_open && model.page == CODEX_PAGE_DASH, "unpair returns to usage");
+    codex_model_on_key(&model, CODEX_KEY_OK_LONG, 9330, &action);
+    expect(model.settings_open, "long ok reopens settings");
+    codex_model_on_key(&model, CODEX_KEY_OK_LONG, 9340, &action);
+    expect(!model.settings_open && model.page == CODEX_PAGE_DASH, "long ok leaves settings");
+    codex_model_on_key(&model, CODEX_KEY_OK_LONG, 9350, &action);
+    while (model.setting != CODEX_SET_RESET) codex_model_on_key(&model, CODEX_KEY_DOWN, 9360, &action);
+    codex_model_on_key(&model, CODEX_KEY_OK, 9370, &action);
+    expect(action.kind == CODEX_ACTION_RESET_PREFS && model.brightness == 2 && model.ble_enabled &&
+               model.sound_enabled,
+           "reset prefs");
+    expect(!model.settings_open && model.page == CODEX_PAGE_DASH, "reset closes settings");
     codex_model_note_input(&model, 1000);
     expect(codex_model_is_dim(&model, 1000 + CODEX_DIM_IDLE_MS), "idle still dims");
     codex_model_on_key(&model, CODEX_KEY_OK, 1000 + CODEX_DIM_IDLE_MS + 10, &action);
