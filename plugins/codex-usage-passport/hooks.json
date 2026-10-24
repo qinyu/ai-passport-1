@@ -1,0 +1,43 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": null,
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/env python3 \"$PLUGIN_ROOT/scripts/hook_entry.py\" --event SessionStart",
+            "timeout": 8,
+            "statusMessage": "Starting Passport Codex Buddy bridge"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": null,
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/env python3 \"$PLUGIN_ROOT/scripts/hook_entry.py\" --event UserPromptSubmit",
+            "timeout": 8,
+            "statusMessage": "Starting Passport Codex Buddy bridge"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": null,
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/env python3 \"$PLUGIN_ROOT/scripts/hook_entry.py\" --event PermissionRequest",
+            "timeout": 60,
+            "statusMessage": "Waiting for Passport approval"
+          }
+        ]
+      }
+    ]
+  }
+}

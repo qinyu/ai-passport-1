@@ -35,6 +35,22 @@ run_static_checks() {
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
         tests/test_key_guard.c -o "${test_dir}/test_key_guard"
     "${test_dir}/test_key_guard"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_codex_protocol.c main/codex_protocol.c \
+        -o "${test_dir}/test_codex_protocol"
+    "${test_dir}/test_codex_protocol"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_codex_model.c main/codex_model.c main/codex_protocol.c \
+        -o "${test_dir}/test_codex_model"
+    "${test_dir}/test_codex_model"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_codex_gesture.c main/codex_gesture.c \
+        -o "${test_dir}/test_codex_gesture"
+    "${test_dir}/test_codex_gesture"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_codex_tone.c main/codex_tone.c \
+        -o "${test_dir}/test_codex_tone"
+    "${test_dir}/test_codex_tone"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Icomponents/bsp/src \
         tests/test_bsp_display_rounding.c components/bsp/src/bsp_display_rounding.c \
         -o "${test_dir}/test_bsp_display_rounding"
@@ -75,6 +91,8 @@ run_static_checks() {
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_verify_firmware.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_archive_firmware.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_install_passport_skills.py
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_codex_bridge.py
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_codex_font_coverage.py
     rm -rf "${test_dir}"
     echo "Host tests: PASS"
 }

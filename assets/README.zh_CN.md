@@ -15,12 +15,23 @@
 - 添加字库前评估 Flash 与内部 RAM 影响；ESP32-C3 无 PSRAM。
 - 不提交许可不允许分发的字库。
 
+### Codex Buddy 子集
+
+| 文件 | 尺寸与格式 | 来源与用途 |
+| --- | --- | --- |
+| [`fonts/codex_font_16.c`](fonts/codex_font_16.c) | 16 px、4 bpp、未压缩的 LVGL 位图 | Codex Buddy 固定界面。 |
+| [`fonts/codex_font_20.c`](fonts/codex_font_20.c) | 20 px、4 bpp、未压缩的 LVGL 位图 | 同一屏幕上的标题和姿态。 |
+| [`fonts/codex_buddy_symbols.txt`](fonts/codex_buddy_symbols.txt) | 一行所需字符 | 由 `tests/test_codex_font_coverage.py` 核对。 |
+
+两个字号都包含可打印 ASCII `U+0020` 到 `U+007E`。源字体是文泉驿微米黑 0.2.0-beta，许可为 Apache-2.0，或带字体例外的 GPL-3.0。完整字库不入库。用 `lv_font_conv` 1.5.3 经 [`../tools/gen_codex_font.sh`](../tools/gen_codex_font.sh) 重新生成。`main/CMakeLists.txt` 把这两个 `.c` 编进应用，控件直接选用 `codex_font_16` 或 `codex_font_20`。两个文件大约占 Flash 80 KB 和 115 KB，是常量位图，不是载入 RAM 的字库。字符表以外的动态批准提示不在覆盖范围内。
+
 ## 图片（images）
 
 可复用的源图与生成的显示资产放在 `images/`。
 
 | 文件 | 尺寸与格式 | 用途与来源 |
 | --- | --- | --- |
+| [`images/pi_pet.c`](images/pi_pet.c) | 四帧带透明通道的 RGB565，高 144 像素 | 来自 Stick 的 Pi 角色 GIF（idle、busy、attention、dizzy），去掉黑底。由 [`../tools/gen_pi_pet.py`](../tools/gen_pi_pet.py) 生成，数据放在 Flash。 |
 | [`images/home.jpg`](images/home.jpg) | 3840 × 2160，JPEG | 嵌入中英文项目 README 的产品主图，突出 AI Passport 产品形象与开放、人人可创作的理念。 |
 | [`images/readme-hardware-specs.png`](images/readme-hardware-specs.png) | 2172 × 724，PNG RGBA | 保留为可选技术参考图，不再用于首页主视觉。于 2026-09-17 使用内置图像生成工具为本仓库生成；已根据文档中的硬件能力契约核对图中的六项标签与参数。 |
 | [`images/logo-wordmark.png`](images/logo-wordmark.png) | 1648 × 336，PNG RGBA | 从仓库原始 `images/logo.png` 中精确裁切并去除背景的黑色字标；用于中英文项目 README 的浅色主题。 |
